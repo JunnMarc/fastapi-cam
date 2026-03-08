@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 
 class CustomerFeatures(BaseModel):
@@ -31,7 +32,84 @@ class CustomerFeatures(BaseModel):
     TotalCharges: float = Field(..., ge=0, examples=[1397.5])
 
 
+class CustomerCreate(CustomerFeatures):
+    external_id: str | None = Field(default=None, examples=["CUST-1009"])
+    name: str | None = Field(default=None, examples=["Alex Morgan"])
+    email: str | None = Field(default=None, examples=["alex@company.com"])
+    segment: str | None = Field(default=None, examples=["SMB"])
+    status: str | None = Field(default="Active", examples=["Active", "At-Risk"])
+    notes: str | None = Field(default=None, examples=["VIP customer"])
+
+
+class CustomerUpdate(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    segment: str | None = None
+    status: str | None = None
+    notes: str | None = None
+
+
+class CustomerOut(BaseModel):
+    id: int
+    external_id: str | None
+    name: str | None
+    email: str | None
+    segment: str | None
+    status: str | None
+    churn_probability: float | None
+    risk_level: str | None
+    last_prediction_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class CustomerDetail(CustomerOut):
+    gender: str
+    SeniorCitizen: int
+    Partner: str
+    Dependents: str
+    tenure: int
+    PhoneService: str
+    MultipleLines: str
+    InternetService: str
+    OnlineSecurity: str
+    OnlineBackup: str
+    DeviceProtection: str
+    TechSupport: str
+    StreamingTV: str
+    StreamingMovies: str
+    Contract: str
+    PaperlessBilling: str
+    PaymentMethod: str
+    MonthlyCharges: float
+    TotalCharges: float
+    notes: str | None
+
+
 class PredictionResponse(BaseModel):
     prediction: str
     probability: float
     risk_level: str
+
+
+class ScoreHistoryOut(BaseModel):
+    id: int
+    customer_id: int
+    probability: float
+    risk_level: str
+    prediction: str
+    created_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"

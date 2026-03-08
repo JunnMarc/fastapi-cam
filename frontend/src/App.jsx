@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -54,8 +54,12 @@ function formatPercent(value) {
 export default function App() {
   const [form, setForm] = useState(initialState);
   const [result, setResult] = useState(null);
+  const [customers, setCustomers] = useState([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [token, setToken] = useState(localStorage.getItem("auth_token") || "");
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
 
   const riskTone = useMemo(() => {
     if (!result) return "neutral";
@@ -72,6 +76,62 @@ export default function App() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+  const loadCustomers = async () => {
+    if (!token) return;
+    setLoadingCustomers(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/customers`, {
+        headers: authHeaders
+      });
+      const payload = await response.json();
+      setCustomers(payload);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingCustomers(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCustomers();
+  }, [token]);
+
+  const handleLoginChange = (field) => (event) => {
+    setLoginForm((prev) => ({ ...prev, [field]: event.target.value }));
+  };
+
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(loginForm)
+      });
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.detail || "Login failed");
+      }
+      const payload = await response.json();
+      localStorage.setItem("auth_token", payload.access_token);
+      setToken(payload.access_token);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("auth_token");
+    setToken("");
+    setCustomers([]);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
@@ -79,9 +139,9 @@ export default function App() {
     setResult(null);
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/predict`, {
+      const response = await fetch(`${API_BASE}/api/v1/customers`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(form)
       });
 
@@ -90,8 +150,41 @@ export default function App() {
         throw new Error(payload.detail || "Prediction failed");
       }
 
+      const created = await response.json();
+      await loadCustomers();
+      const score = await fetch(
+        `${API_BASE}/api/v1/customers/${created.id}/score`,
+        { method: "POST", headers: authHeaders }
+      );
+      if (!score.ok) {
+        const payload = await score.json();
+        throw new Error(payload.detail || "Scoring failed");
+      }
+      const payload = await score.json();
+      setResult(payload);
+      await loadCustomers();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleScore = async (id) => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/customers/${id}/score`, {
+        method: "POST",
+        headers: authHeaders
+      });
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.detail || "Scoring failed");
+      }
       const payload = await response.json();
       setResult(payload);
+      await loadCustomers();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -117,11 +210,44 @@ export default function App() {
         </div>
       </header>
 
+      <section className="panel auth-panel">
+        <div className="panel-header">
+          <h2>Access Control</h2>
+          <p>Sign in to manage the churn portfolio.</p>
+        </div>
+        {token ? (
+          <div className="auth-row">
+            <span className="auth-status">Authenticated</span>
+            <button className="secondary" onClick={handleLogout}>
+              Logout
+            </button>
+          </div>
+        ) : (
+          <form className="auth-row" onSubmit={handleLogin}>
+            <input
+              placeholder="Username"
+              value={loginForm.username}
+              onChange={handleLoginChange("username")}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={loginForm.password}
+              onChange={handleLoginChange("password")}
+            />
+            <button className="secondary" type="submit" disabled={loading}>
+              {loading ? "Signing in..." : "Login"}
+            </button>
+          </form>
+        )}
+        {error ? <p className="error">{error}</p> : null}
+      </section>
+
       <section className="grid">
         <form className="panel" onSubmit={handleSubmit}>
           <div className="panel-header">
-            <h2>Customer Signal Intake</h2>
-            <p>Submit a profile to generate a churn prediction.</p>
+            <h2>Customer Intake</h2>
+            <p>Create a customer and generate a churn prediction.</p>
           </div>
 
           <div className="form-grid">
@@ -216,7 +342,7 @@ export default function App() {
           </div>
 
           <button className="primary" type="submit" disabled={loading}>
-            {loading ? "Scoring..." : "Generate Risk Score"}
+            {loading ? "Saving..." : "Create & Score"}
           </button>
           {error ? <p className="error">{error}</p> : null}
         </form>
@@ -255,6 +381,55 @@ export default function App() {
             </div>
           )}
         </aside>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <h2>Customer Registry</h2>
+          <p>Track, score, and manage churn risk portfolio.</p>
+        </div>
+        {loadingCustomers ? (
+          <p>Loading customers...</p>
+        ) : (
+          <div className="table">
+            <div className="table-head">
+              <span>ID</span>
+              <span>Segment</span>
+              <span>Status</span>
+              <span>Risk</span>
+              <span>Probability</span>
+              <span>Actions</span>
+            </div>
+            {customers.length === 0 ? (
+              <div className="table-row empty">
+                <span>No customers yet.</span>
+              </div>
+            ) : (
+              customers.map((c) => (
+                <div className="table-row" key={c.id}>
+                  <span>#{c.id}</span>
+                  <span>{c.segment || "Unassigned"}</span>
+                  <span>{c.status || "Active"}</span>
+                  <span>{c.risk_level || "—"}</span>
+                  <span>
+                    {typeof c.churn_probability === "number"
+                      ? formatPercent(c.churn_probability)
+                      : "—"}
+                  </span>
+                  <span>
+                    <button
+                      className="secondary"
+                      onClick={() => handleScore(c.id)}
+                      disabled={loading}
+                    >
+                      Score
+                    </button>
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </section>
     </div>
   );

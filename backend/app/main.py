@@ -1,12 +1,29 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+from datetime import datetime
 from .config import settings
 from .model import model_store
-from .schemas import CustomerFeatures, PredictionResponse
+from .auth import create_access_token, verify_token
+from .schemas import (
+    CustomerFeatures,
+    PredictionResponse,
+    CustomerCreate,
+    CustomerUpdate,
+    CustomerOut,
+    CustomerDetail,
+    ScoreHistoryOut,
+    LoginRequest,
+    LoginResponse,
+)
+from .db import get_db, engine
+from .models import Base, Customer, AttritionScore
 
 
 app = FastAPI(title=settings.app_name, version="1.0.0")
+security = HTTPBearer()
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,6 +36,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 def load_model() -> None:
+    Base.metadata.create_all(bind=engine)
     try:
         model_store.load()
     except FileNotFoundError:
@@ -34,13 +52,34 @@ def risk_band(probability: float) -> str:
     return "Low"
 
 
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> str:
+    payload = verify_token(credentials.credentials)
+    return payload.get("sub", "unknown")
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "model_loaded": model_store.model is not None}
 
 
+@app.post(f"/api/{settings.api_version}/login", response_model=LoginResponse)
+def login(payload: LoginRequest) -> LoginResponse:
+    if (
+        payload.username != settings.admin_username
+        or payload.password != settings.admin_password
+    ):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_access_token(payload.username)
+    return LoginResponse(access_token=token)
+
+
 @app.post(f"/api/{settings.api_version}/predict", response_model=PredictionResponse)
-def predict(payload: CustomerFeatures) -> PredictionResponse:
+def predict(
+    payload: CustomerFeatures,
+    _: str = Depends(get_current_user),
+) -> PredictionResponse:
     try:
         prediction, probability = model_store.predict(payload.model_dump())
     except FileNotFoundError as exc:
@@ -51,6 +90,133 @@ def predict(payload: CustomerFeatures) -> PredictionResponse:
         prediction=result,
         probability=round(probability, 4),
         risk_level=risk_band(probability),
+    )
+
+
+@app.post(f"/api/{settings.api_version}/customers", response_model=CustomerOut)
+def create_customer(
+    payload: CustomerCreate,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> CustomerOut:
+    customer = Customer(**payload.model_dump())
+    db.add(customer)
+    db.commit()
+    db.refresh(customer)
+    return customer
+
+
+@app.get(f"/api/{settings.api_version}/customers", response_model=list[CustomerOut])
+def list_customers(
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> list[CustomerOut]:
+    return (
+        db.query(Customer)
+        .order_by(Customer.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+
+@app.get(f"/api/{settings.api_version}/customers/{{customer_id}}", response_model=CustomerDetail)
+def get_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> CustomerDetail:
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return customer
+
+
+@app.patch(f"/api/{settings.api_version}/customers/{{customer_id}}", response_model=CustomerOut)
+def update_customer(
+    customer_id: int,
+    payload: CustomerUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> CustomerOut:
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(customer, key, value)
+    db.commit()
+    db.refresh(customer)
+    return customer
+
+
+@app.post(f"/api/{settings.api_version}/customers/{{customer_id}}/score", response_model=PredictionResponse)
+def score_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> PredictionResponse:
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    features = {
+        "gender": customer.gender,
+        "SeniorCitizen": customer.SeniorCitizen,
+        "Partner": customer.Partner,
+        "Dependents": customer.Dependents,
+        "tenure": customer.tenure,
+        "PhoneService": customer.PhoneService,
+        "MultipleLines": customer.MultipleLines,
+        "InternetService": customer.InternetService,
+        "OnlineSecurity": customer.OnlineSecurity,
+        "OnlineBackup": customer.OnlineBackup,
+        "DeviceProtection": customer.DeviceProtection,
+        "TechSupport": customer.TechSupport,
+        "StreamingTV": customer.StreamingTV,
+        "StreamingMovies": customer.StreamingMovies,
+        "Contract": customer.Contract,
+        "PaperlessBilling": customer.PaperlessBilling,
+        "PaymentMethod": customer.PaymentMethod,
+        "MonthlyCharges": customer.MonthlyCharges,
+        "TotalCharges": customer.TotalCharges,
+    }
+
+    prediction, probability = model_store.predict(features)
+    level = risk_band(probability)
+    result = "CHURN" if prediction == 1 else "STAY"
+
+    customer.churn_probability = probability
+    customer.risk_level = level
+    customer.last_prediction_at = datetime.utcnow()
+    db.add(customer)
+    db.add(
+        AttritionScore(
+            customer_id=customer.id,
+            probability=probability,
+            risk_level=level,
+            prediction=result,
+        )
+    )
+    db.commit()
+
+    return PredictionResponse(
+        prediction=result, probability=round(probability, 4), risk_level=level
+    )
+
+
+@app.get(f"/api/{settings.api_version}/customers/{{customer_id}}/scores", response_model=list[ScoreHistoryOut])
+def list_scores(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> list[ScoreHistoryOut]:
+    return (
+        db.query(AttritionScore)
+        .filter(AttritionScore.customer_id == customer_id)
+        .order_by(AttritionScore.id.desc())
+        .all()
     )
 
 
