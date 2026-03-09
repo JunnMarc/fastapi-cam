@@ -3,6 +3,7 @@ import { Map, MapControls, MapClusterLayer, MapMarker, MarkerContent, MarkerLabe
 import { useAppContext } from "../context/AppContext";
 import regionsData from "@/data/psgc/regions.json";
 import cityCentroids from "@/data/geo/city_centroids.json";
+import { InsightPieChart, InsightBarChart } from "../components/charts/InsightCharts";
 
 function formatPercent(value) {
   return `${(value * 100).toFixed(1)}%`;
@@ -102,112 +103,55 @@ export default function Dashboard() {
             </div>
             <div className="insight-list">
               <p className="label">Contract Mix</p>
-              {insights.contract_mix.map((b) => (
-                <div className="list-row" key={`contract-${b.label}`}>
-                  <span>{b.label}</span>
-                  <span>{b.count}</span>
-                </div>
-              ))}
+              <InsightPieChart data={insights.contract_mix} name="Contract" donut={true} />
             </div>
             <div className="insight-list">
               <p className="label">Internet Service</p>
-              {insights.internet_mix.map((b) => (
-                <div className="list-row" key={`internet-${b.label}`}>
-                  <span>{b.label}</span>
-                  <span>{b.count}</span>
-                </div>
-              ))}
+              <InsightPieChart data={insights.internet_mix} name="Internet" />
             </div>
             <div className="insight-list">
               <p className="label">Tenure Buckets</p>
-              {insights.tenure_buckets.map((b) => (
-                <div className="list-row" key={`tenure-${b.label}`}>
-                  <span>{b.label}</span>
-                  <span>{b.count}</span>
-                </div>
-              ))}
+              <InsightBarChart data={insights.tenure_buckets} name="Customers" />
             </div>
             <div className="insight-list">
               <p className="label">Risk Breakdown</p>
-              {insights.risk_breakdown.map((b) => (
-                <div className="list-row" key={`risk-${b.label}`}>
-                  <span>{b.label}</span>
-                  <span>{b.count}</span>
-                </div>
-              ))}
+              <InsightPieChart data={insights.risk_breakdown} name="Risk" donut={true} />
             </div>
             <div className="insight-list">
               <p className="label">Region Mix</p>
-              {topBuckets(insights.region_mix, 10).map((b) => (
-                <div className="list-row" key={`region-${b.label}`}>
-                  <span>{b.label}</span>
-                  <span>{b.count}</span>
-                </div>
-              ))}
+              <InsightBarChart data={topBuckets(insights.region_mix, 10)} name="Customers" horizontal={true} />
             </div>
             <div className="insight-list">
               <p className="label">Province Mix</p>
-              {topBuckets(insights.province_mix, 10).map((b) => (
-                <div className="list-row" key={`province-${b.label}`}>
-                  <span>{b.label}</span>
-                  <span>{b.count}</span>
-                </div>
-              ))}
+              <InsightBarChart data={topBuckets(insights.province_mix, 10)} name="Customers" horizontal={true} />
             </div>
             <div className="insight-list">
               <p className="label">City Mix</p>
-              {topBuckets(insights.city_mix, 12).map((b) => (
-                <div className="list-row" key={`city-${b.label}`}>
-                  <span>{b.label}</span>
-                  <span>{b.count}</span>
-                </div>
-              ))}
+              <InsightBarChart data={topBuckets(insights.city_mix, 5)} name="Customers" horizontal={true} />
             </div>
             <div className="insight-list">
               <p className="label">Service Mix</p>
-              {topBuckets(insights.service_mix, 8).map((b) => (
-                <div className="list-row" key={`service-${b.label}`}>
-                  <span>{b.label}</span>
-                  <span>{b.count}</span>
-                </div>
-              ))}
+              <InsightBarChart data={topBuckets(insights.service_mix, 8)} name="Customers" horizontal={true} />
             </div>
             <div className="insight-list">
               <p className="label">Plan Mix</p>
-              {topBuckets(insights.plan_mix, 8).map((b) => (
-                <div className="list-row" key={`plan-${b.label}`}>
-                  <span>{b.label}</span>
-                  <span>{b.count}</span>
-                </div>
-              ))}
+              <InsightPieChart data={topBuckets(insights.plan_mix, 8)} name="Plan" donut={true} />
             </div>
             <div className="insight-list">
               <p className="label">Top Regions by High Risk</p>
-              {insights.region_high_risk
-                .filter((b) => b.count > 0)
-                .slice(0, 5)
-                .map((b) => (
-                  <div className="list-row" key={`high-region-${b.label}`}>
-                    <span>{b.label}</span>
-                    <span>
-                      {b.count} ({formatPercent(b.rate)})
-                    </span>
-                  </div>
-                ))}
+              <InsightBarChart 
+                data={insights.region_high_risk.filter((b) => b.count > 0).slice(0, 5)} 
+                name="High Risk Users" 
+                horizontal={true} 
+              />
             </div>
             <div className="insight-list">
               <p className="label">Top Cities by High Risk</p>
-              {insights.city_high_risk
-                .filter((b) => b.count > 0)
-                .slice(0, 5)
-                .map((b) => (
-                  <div className="list-row" key={`high-city-${b.label}`}>
-                    <span>{b.label}</span>
-                    <span>
-                      {b.count} ({formatPercent(b.rate)})
-                    </span>
-                  </div>
-                ))}
+              <InsightBarChart 
+                data={insights.city_high_risk.filter((b) => b.count > 0).slice(0, 5)} 
+                name="High Risk Users" 
+                horizontal={true} 
+              />
             </div>
             <div className="insight-map">
               <div className="map-header">

@@ -651,10 +651,10 @@ select {
   border-radius: 14px;
   padding: 16px;
   border: 1px solid var(--outline);
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  max-height: 260px;
-  overflow: auto;
+  min-height: 280px;
 }
 
 .insight-map {
