@@ -96,6 +96,10 @@ def risk_band(probability: float) -> str:
     return "Low"
 
 
+def status_from_risk(risk_level: str) -> str:
+    return "At-Risk" if risk_level in {"High", "Medium"} else "Active"
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> str:
@@ -161,6 +165,7 @@ def predict(
 ) -> PredictionResponse:
     try:
         prediction, probability = model_store.predict(payload.model_dump())
+        explanation = model_store.explain(payload.model_dump())
     except FileNotFoundError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -169,6 +174,8 @@ def predict(
         prediction=result,
         probability=round(probability, 4),
         risk_level=risk_band(probability),
+        drivers=explanation.get("drivers", []),
+        protectors=explanation.get("protectors", []),
     )
 
 
@@ -263,12 +270,14 @@ def score_customer(
     }
 
     prediction, probability = model_store.predict(features)
+    explanation = model_store.explain(features)
     level = risk_band(probability)
     result = "CHURN" if prediction == 1 else "STAY"
 
     customer.churn_probability = probability
     customer.risk_level = level
     customer.last_prediction_at = datetime.utcnow()
+    customer.status = status_from_risk(level)
     db.add(customer)
     db.add(
         AttritionScore(
@@ -281,7 +290,11 @@ def score_customer(
     db.commit()
 
     return PredictionResponse(
-        prediction=result, probability=round(probability, 4), risk_level=level
+        prediction=result,
+        probability=round(probability, 4),
+        risk_level=level,
+        drivers=explanation.get("drivers", []),
+        protectors=explanation.get("protectors", []),
     )
 
 

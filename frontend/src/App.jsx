@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import {
   ProSidebar,
   Menu,
@@ -22,6 +22,7 @@ import citiesData from "@/data/psgc/cities.json";
 import cityCentroids from "@/data/geo/city_centroids.json";
 import {
   FiUsers,
+  FiUser,
   FiGrid,
   FiPlusSquare,
   FiLogOut,
@@ -125,6 +126,8 @@ export default function App() {
   const [users, setUsers] = useState([]);
   const [userForm, setUserForm] = useState({ username: "", password: "", is_admin: 0 });
   const [activeModal, setActiveModal] = useState(null);
+  const [activePage, setActivePage] = useState("dashboard");
+  const [totalCustomers, setTotalCustomers] = useState(0);
   const [insights, setInsights] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [mapFilter, setMapFilter] = useState("regions");
@@ -140,6 +143,63 @@ export default function App() {
   const [noteDrafts, setNoteDrafts] = useState({});
   const [activeCaseNotes, setActiveCaseNotes] = useState([]);
   const [activeCaseId, setActiveCaseId] = useState(null);
+  const modalRef = useRef(null);
+  const lastFocusRef = useRef(null);
+  const [registryPage, setRegistryPage] = useState(1);
+  const [registryPageSize, setRegistryPageSize] = useState(25);
+
+  const modalTitle = useMemo(() => {
+    if (activeModal === "login") return "Access Control";
+    if (activeModal === "users") return "User Management";
+    if (activeModal === "customers") return "Customer Registry";
+    if (activeModal === "retention") return "Retention Workflow";
+    if (activeModal === "intake") return "Customer Intake";
+    return "";
+  }, [activeModal]);
+
+  useEffect(() => {
+    if (!activeModal) return;
+    const modalEl = modalRef.current;
+    if (!modalEl) return;
+
+    lastFocusRef.current = document.activeElement;
+    const focusable = modalEl.querySelectorAll(
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (first && typeof first.focus === "function") {
+      first.focus();
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setActiveModal(null);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      if (!focusable.length) {
+        event.preventDefault();
+        return;
+      }
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (lastFocusRef.current && typeof lastFocusRef.current.focus === "function") {
+        lastFocusRef.current.focus();
+      }
+    };
+  }, [activeModal]);
 
   const riskTone = useMemo(() => {
     if (!result) return "neutral";
@@ -236,13 +296,16 @@ export default function App() {
     }
     return map;
   }, []);
-  const loadCustomers = async () => {
+  const loadCustomers = async (limit = 50, offset = 0) => {
     if (!token) return;
     setLoadingCustomers(true);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/customers`, {
-        headers: authHeaders
-      });
+      const response = await fetch(
+        `${API_BASE}/api/v1/customers?limit=${limit}&offset=${offset}`,
+        {
+          headers: authHeaders
+        }
+      );
       const payload = await response.json();
       setCustomers(payload);
     } catch (err) {
@@ -259,6 +322,16 @@ export default function App() {
     loadRetentionCases();
   }, [token]);
 
+  useEffect(() => {
+    setRegistryPage(1);
+  }, [registryPageSize]);
+
+  useEffect(() => {
+    if (!token || activePage !== "registry") return;
+    const offset = (registryPage - 1) * registryPageSize;
+    loadCustomers(registryPageSize, offset);
+  }, [token, activePage, registryPage, registryPageSize]);
+
   const loadInsights = async () => {
     if (!token) return;
     setLoadingInsights(true);
@@ -271,6 +344,9 @@ export default function App() {
       }
       const payload = await response.json();
       setInsights(payload);
+      if (typeof payload.total_customers === "number") {
+        setTotalCustomers(payload.total_customers);
+      }
     } catch {
       // ignore
     } finally {
@@ -346,6 +422,7 @@ export default function App() {
     setToken("");
     setCustomers([]);
     setUsers([]);
+    setActivePage("dashboard");
   };
 
   const handleUserChange = (field) => (event) => {
@@ -395,7 +472,12 @@ export default function App() {
       }
 
       const created = await response.json();
-      await loadCustomers();
+      if (activePage === "registry") {
+        const offset = (registryPage - 1) * registryPageSize;
+        await loadCustomers(registryPageSize, offset);
+      } else {
+        await loadCustomers();
+      }
       const score = await fetch(
         `${API_BASE}/api/v1/customers/${created.id}/score`,
         { method: "POST", headers: authHeaders }
@@ -406,7 +488,12 @@ export default function App() {
       }
       const payload = await score.json();
       setResult(payload);
-      await loadCustomers();
+      if (activePage === "registry") {
+        const offset = (registryPage - 1) * registryPageSize;
+        await loadCustomers(registryPageSize, offset);
+      } else {
+        await loadCustomers();
+      }
       await loadInsights();
     } catch (err) {
       setError(err.message);
@@ -520,7 +607,12 @@ export default function App() {
       }
       const payload = await response.json();
       setResult(payload);
-      await loadCustomers();
+      if (activePage === "registry") {
+        const offset = (registryPage - 1) * registryPageSize;
+        await loadCustomers(registryPageSize, offset);
+      } else {
+        await loadCustomers();
+      }
       await loadInsights();
     } catch (err) {
       setError(err.message);
@@ -528,6 +620,11 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  const totalRegistryPages = Math.max(
+    1,
+    Math.ceil((totalCustomers || customers.length) / registryPageSize)
+  );
 
   return (
     <div className={`app-shell ${token ? "authed" : "guest"}`}>
@@ -542,7 +639,18 @@ export default function App() {
             </SidebarHeader>
             <SidebarContent>
               <Menu iconShape="circle">
-                <MenuItem icon={<FiGrid />} onClick={() => setActiveModal("customers")}>
+                <MenuItem
+                  icon={<FiGrid />}
+                  active={activePage === "dashboard"}
+                  onClick={() => setActivePage("dashboard")}
+                >
+                  Dashboard
+                </MenuItem>
+                <MenuItem
+                  icon={<FiUsers />}
+                  active={activePage === "registry"}
+                  onClick={() => setActivePage("registry")}
+                >
                   Customer Registry
                 </MenuItem>
                 <MenuItem icon={<FiPlusSquare />} onClick={() => setActiveModal("intake")}>
@@ -551,7 +659,7 @@ export default function App() {
                 <MenuItem icon={<FiClipboard />} onClick={() => setActiveModal("retention")}>
                   Retention Workflow
                 </MenuItem>
-                <MenuItem icon={<FiUsers />} onClick={() => setActiveModal("users")}>
+                <MenuItem icon={<FiUser />} onClick={() => setActiveModal("users")}>
                   User Management
                 </MenuItem>
               </Menu>
@@ -570,7 +678,7 @@ export default function App() {
         <header className="topbar">
           <div className="brand">
             <p className="badge">Philippine Telco Ops</p>
-            <h1>Customer Attrition System</h1>
+            <h1>Customer Churn System</h1>
             <p className="subtitle">
               Operational command center for churn risk, retention actions, and portfolio
               visibility across Philippine telco services.
@@ -588,12 +696,18 @@ export default function App() {
                   risk scoring, and portfolio management for Philippine telco accounts.
                 </p>
               </div>
-              <button className="primary" onClick={() => setActiveModal("login")}>
+              <button
+                className="primary"
+                onClick={() => setActiveModal("login")}
+                type="button"
+              >
                 Sign In
               </button>
             </div>
           </section>
         ) : (
+          <>
+          {activePage === "dashboard" ? (
           <>
           <section className="summary-grid">
             <div className="summary-card">
@@ -624,7 +738,9 @@ export default function App() {
               <p>Portfolio health snapshots based on current subscriber registry.</p>
             </div>
             {loadingInsights || !insights ? (
-              <p>Loading insights...</p>
+                  <p role="status" aria-live="polite">
+                    Loading insights...
+                  </p>
             ) : (
               <div className="insight-grid">
                 <div className="insight-card">
@@ -759,6 +875,7 @@ export default function App() {
                         className={mapFilter === "regions" ? "chip active" : "chip"}
                         onClick={() => setMapFilter("regions")}
                         type="button"
+                        aria-pressed={mapFilter === "regions"}
                       >
                         Regions
                       </button>
@@ -766,6 +883,7 @@ export default function App() {
                         className={mapFilter === "regions_high" ? "chip active" : "chip"}
                         onClick={() => setMapFilter("regions_high")}
                         type="button"
+                        aria-pressed={mapFilter === "regions_high"}
                       >
                         High Risk Regions
                       </button>
@@ -773,6 +891,7 @@ export default function App() {
                         className={mapFilter === "cities_high" ? "chip active" : "chip"}
                         onClick={() => setMapFilter("cities_high")}
                         type="button"
+                        aria-pressed={mapFilter === "cities_high"}
                       >
                         High Risk Cities
                       </button>
@@ -871,9 +990,160 @@ export default function App() {
               </div>
             )}
           </section>
+          <section className="panel">
+            <div className="panel-header">
+              <h2>Workspace Guidance</h2>
+              <p>Use the sidebar to switch between workflows.</p>
+            </div>
+            <ul className="guidance">
+              <li>Login to unlock customer and user workflows.</li>
+              <li>Customer Intake creates profiles and triggers a score.</li>
+              <li>User Management is restricted to admins.</li>
+              <li>Customer Registry is the portfolio view.</li>
+            </ul>
+          </section>
+          </>
+          ) : null}
 
-          <section className="grid">
-            <aside className={`panel result ${riskTone}`}>
+          {activePage === "registry" ? (
+          <>
+          <section className="panel registry-header">
+            <div className="panel-header">
+              <h2>Customer Registry</h2>
+              <p>Portfolio view with on-demand scoring and risk explanations.</p>
+            </div>
+            <div className="registry-actions">
+              <div className="registry-meta">
+                <span className="label">Total Records</span>
+                <span className="value">
+                  {totalCustomers || customers.length}
+                </span>
+              </div>
+              <div className="registry-controls">
+                <label className="registry-select">
+                  Rows
+                  <select
+                    value={registryPageSize}
+                    onChange={(event) => setRegistryPageSize(Number(event.target.value))}
+                    aria-label="Rows per page"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                </label>
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => {
+                    const offset = (registryPage - 1) * registryPageSize;
+                    loadCustomers(registryPageSize, offset);
+                  }}
+                  disabled={loadingCustomers}
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
+          </section>
+          <section className="registry-layout">
+            <div className="panel registry-table">
+              <div className="panel-header">
+                <h2>Registry Table</h2>
+                <p>Score customers to refresh risk drivers and probability.</p>
+              </div>
+              {loadingCustomers ? (
+                <p role="status" aria-live="polite">
+                  Loading customers...
+                </p>
+              ) : (
+                <>
+                  <div className="table" role="table" aria-label="Customers">
+                    <div className="table-head" role="row">
+                      <span role="columnheader">ID</span>
+                      <span role="columnheader">Region</span>
+                      <span role="columnheader">City</span>
+                      <span role="columnheader">Status</span>
+                      <span role="columnheader">Risk</span>
+                      <span role="columnheader">Probability</span>
+                      <span role="columnheader">Actions</span>
+                    </div>
+                    {customers.length === 0 ? (
+                      <div className="table-row empty" role="row">
+                        <span role="cell">No customers yet.</span>
+                      </div>
+                    ) : (
+                      customers.map((c) => (
+                        <div className="table-row" role="row" key={c.id}>
+                          <span role="cell">#{c.id}</span>
+                          <span role="cell">{c.region || "Unassigned"}</span>
+                          <span role="cell">{c.city || "-"}</span>
+                          <span role="cell">{c.status || "Active"}</span>
+                          <span role="cell">{c.risk_level || "-"}</span>
+                          <span role="cell">
+                            {typeof c.churn_probability === "number"
+                              ? formatPercent(c.churn_probability)
+                              : "-"}
+                          </span>
+                          <span role="cell">
+                            <button
+                              className="secondary"
+                              onClick={() => handleScore(c.id)}
+                              disabled={loading}
+                              type="button"
+                            >
+                              Score
+                            </button>
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {customers.length > 0 ? (
+                    <div className="pagination">
+                      <button
+                        className="ghost"
+                        type="button"
+                        onClick={() => setRegistryPage(1)}
+                        disabled={registryPage === 1}
+                      >
+                        First
+                      </button>
+                      <button
+                        className="ghost"
+                        type="button"
+                        onClick={() => setRegistryPage((p) => Math.max(1, p - 1))}
+                        disabled={registryPage === 1}
+                      >
+                        Prev
+                      </button>
+                      <span className="pagination-meta">
+                        Page {registryPage} of {totalRegistryPages}
+                      </span>
+                      <button
+                        className="ghost"
+                        type="button"
+                        onClick={() =>
+                          setRegistryPage((p) => Math.min(totalRegistryPages, p + 1))
+                        }
+                        disabled={registryPage === totalRegistryPages}
+                      >
+                        Next
+                      </button>
+                      <button
+                        className="ghost"
+                        type="button"
+                        onClick={() => setRegistryPage(totalRegistryPages)}
+                        disabled={registryPage === totalRegistryPages}
+                      >
+                        Last
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+            <aside className={`panel result registry-risk ${riskTone}`}>
               <div className="panel-header">
                 <h2>Risk Outcome</h2>
                 <p>Operational readiness for retention prioritization.</p>
@@ -900,10 +1170,34 @@ export default function App() {
                         ? "Targeted offer and service review."
                         : "Maintain current engagement cadence."}
                   </div>
+                  {result.drivers?.length ? (
+                    <div>
+                      <p className="label">Top Risk Drivers</p>
+                      <ul className="pill-list" aria-label="Top risk drivers">
+                        {result.drivers.map((driver) => (
+                          <li className="pill" key={`driver-${driver}`}>
+                            {driver}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {result.protectors?.length ? (
+                    <div>
+                      <p className="label">Protective Factors</p>
+                      <ul className="pill-list" aria-label="Protective factors">
+                        {result.protectors.map((protector) => (
+                          <li className="pill" key={`protector-${protector}`}>
+                            {protector}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="result-empty">
-                  <p>Submit a customer profile to see the churn score.</p>
+                  <p>Score a customer to see the churn risk explanation.</p>
                   <div className="empty-metrics">
                     <div>
                       <p className="label">Prediction</p>
@@ -921,39 +1215,35 @@ export default function App() {
                 </div>
               )}
             </aside>
-            <div className="panel">
-              <div className="panel-header">
-                <h2>Workspace Guidance</h2>
-                <p>Use the sidebar to switch between workflows.</p>
-              </div>
-              <ul className="guidance">
-                <li>Login to unlock customer and user workflows.</li>
-                <li>Customer Intake creates profiles and triggers a score.</li>
-                <li>User Management is restricted to admins.</li>
-                <li>Customer Registry is the portfolio view.</li>
-              </ul>
-            </div>
           </section>
+          </>
+          ) : null}
           </>
         )}
       </main>
 
       {activeModal ? (
-        <div className="modal-backdrop" onClick={() => setActiveModal(null)}>
-          <div className="modal" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="modal-backdrop"
+          onClick={() => setActiveModal(null)}
+          role="presentation"
+        >
+          <div
+            className="modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`modal-title-${activeModal}`}
+            ref={modalRef}
+          >
             <div className="modal-header">
-              <h3>
-                {activeModal === "login"
-                  ? "Access Control"
-                  : activeModal === "users"
-                    ? "User Management"
-                    : activeModal === "customers"
-                      ? "Customer Registry"
-                      : activeModal === "retention"
-                        ? "Retention Workflow"
-                        : "Customer Intake"}
-              </h3>
-              <button className="secondary" onClick={() => setActiveModal(null)}>
+              <h3 id={`modal-title-${activeModal}`}>{modalTitle}</h3>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => setActiveModal(null)}
+                aria-label="Close dialog"
+              >
                 Close
               </button>
             </div>
@@ -974,6 +1264,7 @@ export default function App() {
                     <label>
                       Username
                       <input
+                        aria-label="Username"
                         placeholder="admin"
                         value={loginForm.username}
                         onChange={handleLoginChange("username")}
@@ -982,6 +1273,7 @@ export default function App() {
                     <label>
                       Password
                       <input
+                        aria-label="Password"
                         type="password"
                         placeholder="********"
                         value={loginForm.password}
@@ -993,7 +1285,11 @@ export default function App() {
                     </button>
                   </form>
                 </div>
-                {error ? <p className="error">{error}</p> : null}
+                {error ? (
+                  <p className="error" role="alert">
+                    {error}
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -1003,17 +1299,20 @@ export default function App() {
                   <>
                     <form className="auth-row" onSubmit={handleCreateUser}>
                       <input
+                        aria-label="Username"
                         placeholder="Username"
                         value={userForm.username}
                         onChange={handleUserChange("username")}
                       />
                       <input
+                        aria-label="Password"
                         type="password"
                         placeholder="Password"
                         value={userForm.password}
                         onChange={handleUserChange("password")}
                       />
                       <select
+                        aria-label="Admin role"
                         value={userForm.is_admin}
                         onChange={handleUserChange("is_admin")}
                       >
@@ -1024,30 +1323,30 @@ export default function App() {
                         Create User
                       </button>
                     </form>
-                    <div className="table">
-                      <div className="table-head">
-                        <span>ID</span>
-                        <span>Username</span>
-                        <span>Admin</span>
-                        <span>Created</span>
-                        <span></span>
-                        <span></span>
+                    <div className="table" role="table" aria-label="Users">
+                      <div className="table-head" role="row">
+                        <span role="columnheader">ID</span>
+                        <span role="columnheader">Username</span>
+                        <span role="columnheader">Admin</span>
+                        <span role="columnheader">Created</span>
+                        <span role="columnheader" aria-hidden="true"></span>
+                        <span role="columnheader" aria-hidden="true"></span>
                       </div>
                       {users.length === 0 ? (
-                        <div className="table-row empty">
-                          <span>No users loaded.</span>
+                        <div className="table-row empty" role="row">
+                          <span role="cell">No users loaded.</span>
                         </div>
                       ) : (
                         users.map((u) => (
-                          <div className="table-row" key={u.id}>
-                            <span>#{u.id}</span>
-                            <span>{u.username}</span>
-                            <span>{u.is_admin ? "Yes" : "No"}</span>
-                            <span>
+                          <div className="table-row" role="row" key={u.id}>
+                            <span role="cell">#{u.id}</span>
+                            <span role="cell">{u.username}</span>
+                            <span role="cell">{u.is_admin ? "Yes" : "No"}</span>
+                            <span role="cell">
                               {u.created_at ? new Date(u.created_at).toLocaleString() : "-"}
                             </span>
-                            <span></span>
-                            <span></span>
+                            <span role="cell"></span>
+                            <span role="cell"></span>
                           </div>
                         ))
                       )}
@@ -1059,61 +1358,13 @@ export default function App() {
               </div>
             ) : null}
 
-            {activeModal === "customers" ? (
-              <div className="modal-body">
-                {loadingCustomers ? (
-                  <p>Loading customers...</p>
-                ) : (
-                  <div className="table">
-                    <div className="table-head">
-                      <span>ID</span>
-                      <span>Region</span>
-                      <span>City</span>
-                      <span>Status</span>
-                      <span>Risk</span>
-                      <span>Probability</span>
-                      <span>Actions</span>
-                    </div>
-                    {customers.length === 0 ? (
-                      <div className="table-row empty">
-                        <span>No customers yet.</span>
-                      </div>
-                    ) : (
-                      customers.map((c) => (
-                        <div className="table-row" key={c.id}>
-                          <span>#{c.id}</span>
-                          <span>{c.region || "Unassigned"}</span>
-                          <span>{c.city || "-"}</span>
-                          <span>{c.status || "Active"}</span>
-                          <span>{c.risk_level || "-"}</span>
-                          <span>
-                            {typeof c.churn_probability === "number"
-                              ? formatPercent(c.churn_probability)
-                              : "-"}
-                          </span>
-                          <span>
-                            <button
-                              className="secondary"
-                              onClick={() => handleScore(c.id)}
-                              disabled={loading}
-                            >
-                              Score
-                            </button>
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : null}
-
             {activeModal === "retention" ? (
               <div className="modal-body">
                 {token ? (
                   <>
                     <form className="retention-form" onSubmit={handleCreateRetentionCase}>
                       <select
+                        aria-label="Customer"
                         value={retentionForm.customer_id}
                         onChange={handleRetentionChange("customer_id")}
                         required
@@ -1126,6 +1377,7 @@ export default function App() {
                         ))}
                       </select>
                       <select
+                        aria-label="Case status"
                         value={retentionForm.status}
                         onChange={handleRetentionChange("status")}
                       >
@@ -1135,6 +1387,7 @@ export default function App() {
                         <option value="Resolved">Resolved</option>
                       </select>
                       <select
+                        aria-label="Case priority"
                         value={retentionForm.priority}
                         onChange={handleRetentionChange("priority")}
                       >
@@ -1143,11 +1396,13 @@ export default function App() {
                         <option value="High">High</option>
                       </select>
                       <input
+                        aria-label="Case owner"
                         placeholder="Owner"
                         value={retentionForm.owner}
                         onChange={handleRetentionChange("owner")}
                       />
                       <input
+                        aria-label="Next action date"
                         type="date"
                         value={retentionForm.next_action_date}
                         onChange={handleRetentionChange("next_action_date")}
@@ -1215,6 +1470,7 @@ export default function App() {
                                 <div className="retention-notes">
                                   <div className="note-input">
                                     <input
+                                      aria-label="Add note"
                                       placeholder="Add note"
                                       value={noteDrafts[rc.id] || ""}
                                       onChange={handleNoteChange(rc.id)}
@@ -1258,16 +1514,24 @@ export default function App() {
                 <form onSubmit={handleSubmit}>
                   <div className="form-grid">
                     <div className="field">
-                      <label>Region</label>
-                      <select value={form.region} onChange={handleRegionChange}>
+                      <label htmlFor="intake-region">Region</label>
+                      <select
+                        id="intake-region"
+                        value={form.region}
+                        onChange={handleRegionChange}
+                      >
                         {regionOptions.map((opt) => (
                           <option key={opt.code}>{opt.name}</option>
                         ))}
                       </select>
                     </div>
                     <div className="field">
-                      <label>Province</label>
-                      <select value={form.province} onChange={handleProvinceChange}>
+                      <label htmlFor="intake-province">Province</label>
+                      <select
+                        id="intake-province"
+                        value={form.province}
+                        onChange={handleProvinceChange}
+                      >
                         <option value="">Select province</option>
                         {provinceOptions.map((opt) => (
                           <option key={opt.code}>{opt.name}</option>
@@ -1275,8 +1539,8 @@ export default function App() {
                       </select>
                     </div>
                     <div className="field">
-                      <label>City</label>
-                      <select value={form.city} onChange={handleCityChange}>
+                      <label htmlFor="intake-city">City</label>
+                      <select id="intake-city" value={form.city} onChange={handleCityChange}>
                         <option value="">Select city/municipality</option>
                         {cityOptions.map((opt) => (
                           <option key={opt.code}>{opt.name}</option>
@@ -1284,40 +1548,50 @@ export default function App() {
                       </select>
                     </div>
                     <div className="field">
-                      <label>Barangay</label>
+                      <label htmlFor="intake-barangay">Barangay</label>
                       <input
+                        id="intake-barangay"
                         value={form.barangay}
                         onChange={handleChange("barangay")}
                         placeholder="United Bayanihan"
                       />
                     </div>
                     <div className="field">
-                      <label>Service Type</label>
-                      <select value={form.service_type} onChange={handleChange("service_type")}>
+                      <label htmlFor="intake-service-type">Service Type</label>
+                      <select
+                        id="intake-service-type"
+                        value={form.service_type}
+                        onChange={handleChange("service_type")}
+                      >
                         {selectOptions.service_type.map((opt) => (
                           <option key={opt}>{opt}</option>
                         ))}
                       </select>
                     </div>
                     <div className="field">
-                      <label>Plan Type</label>
-                      <select value={form.plan_type} onChange={handleChange("plan_type")}>
+                      <label htmlFor="intake-plan-type">Plan Type</label>
+                      <select
+                        id="intake-plan-type"
+                        value={form.plan_type}
+                        onChange={handleChange("plan_type")}
+                      >
                         {selectOptions.plan_type.map((opt) => (
                           <option key={opt}>{opt}</option>
                         ))}
                       </select>
                     </div>
                     <div className="field">
-                      <label>Gender</label>
-                      <select value={form.gender} onChange={handleChange("gender")}>
+                      <label htmlFor="intake-gender">Gender</label>
+                      <select id="intake-gender" value={form.gender} onChange={handleChange("gender")}>
                         {selectOptions.gender.map((opt) => (
                           <option key={opt}>{opt}</option>
                         ))}
                       </select>
                     </div>
                     <div className="field">
-                      <label>Senior Citizen</label>
+                      <label htmlFor="intake-senior">Senior Citizen</label>
                       <select
+                        id="intake-senior"
                         value={form.SeniorCitizen}
                         onChange={handleChange("SeniorCitizen")}
                       >
@@ -1326,16 +1600,24 @@ export default function App() {
                       </select>
                     </div>
                     <div className="field">
-                      <label>Partner</label>
-                      <select value={form.Partner} onChange={handleChange("Partner")}>
+                      <label htmlFor="intake-partner">Partner</label>
+                      <select
+                        id="intake-partner"
+                        value={form.Partner}
+                        onChange={handleChange("Partner")}
+                      >
                         {selectOptions.Partner.map((opt) => (
                           <option key={opt}>{opt}</option>
                         ))}
                       </select>
                     </div>
                     <div className="field">
-                      <label>Dependents</label>
-                      <select value={form.Dependents} onChange={handleChange("Dependents")}>
+                      <label htmlFor="intake-dependents">Dependents</label>
+                      <select
+                        id="intake-dependents"
+                        value={form.Dependents}
+                        onChange={handleChange("Dependents")}
+                      >
                         {selectOptions.Dependents.map((opt) => (
                           <option key={opt}>{opt}</option>
                         ))}
@@ -1343,8 +1625,9 @@ export default function App() {
                     </div>
 
                     <div className="field">
-                      <label>Tenure (months)</label>
+                      <label htmlFor="intake-tenure">Tenure (months)</label>
                       <input
+                        id="intake-tenure"
                         type="number"
                         min="0"
                         value={form.tenure}
@@ -1352,8 +1635,9 @@ export default function App() {
                       />
                     </div>
                     <div className="field">
-                      <label>Monthly Charges</label>
+                      <label htmlFor="intake-monthly">Monthly Charges</label>
                       <input
+                        id="intake-monthly"
                         type="number"
                         step="0.01"
                         min="0"
@@ -1362,8 +1646,9 @@ export default function App() {
                       />
                     </div>
                     <div className="field">
-                      <label>Total Charges</label>
+                      <label htmlFor="intake-total">Total Charges</label>
                       <input
+                        id="intake-total"
                         type="number"
                         step="0.01"
                         min="0"
@@ -1385,16 +1670,19 @@ export default function App() {
                       "Contract",
                       "PaperlessBilling",
                       "PaymentMethod"
-                    ].map((field) => (
-                      <div className="field" key={field}>
-                        <label>{field}</label>
-                        <select value={form[field]} onChange={handleChange(field)}>
+                    ].map((field) => {
+                      const fieldId = `intake-${field}`;
+                      return (
+                        <div className="field" key={field}>
+                          <label htmlFor={fieldId}>{field}</label>
+                          <select id={fieldId} value={form[field]} onChange={handleChange(field)}>
                           {selectOptions[field].map((opt) => (
                             <option key={opt}>{opt}</option>
                           ))}
-                        </select>
-                      </div>
-                    ))}
+                          </select>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <button className="primary" type="submit" disabled={loading}>

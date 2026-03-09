@@ -109,6 +109,8 @@ class PredictionResponse(BaseModel):
     prediction: str
     probability: float
     risk_level: str
+    drivers: list[str] = Field(default_factory=list)
+    protectors: list[str] = Field(default_factory=list)
 
 
 class ScoreHistoryOut(BaseModel):

@@ -1,4 +1,4 @@
-# Customer Attrition System (FastAPI + React)
+# Customer Churn System (FastAPI + React)
 
 This repo contains a minimal end-to-end churn prediction system derived from the logic in `FinalProject_Group6.ipynb`.
 
