@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from .config import settings
 from .model import model_store
-from .auth import create_access_token, verify_token
+from .auth import create_access_token, verify_token, hash_password, verify_password
 from .schemas import (
     CustomerFeatures,
     PredictionResponse,
@@ -17,9 +17,11 @@ from .schemas import (
     ScoreHistoryOut,
     LoginRequest,
     LoginResponse,
+    UserCreate,
+    UserOut,
 )
-from .db import get_db, engine
-from .models import Base, Customer, AttritionScore
+from .db import get_db, engine, SessionLocal
+from .models import Base, Customer, AttritionScore, User
 
 
 app = FastAPI(title=settings.app_name, version="1.0.0")
@@ -37,6 +39,19 @@ app.add_middleware(
 @app.on_event("startup")
 def load_model() -> None:
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        existing = db.query(User).filter(User.username == settings.admin_username).first()
+        if not existing:
+            admin = User(
+                username=settings.admin_username,
+                password_hash=hash_password(settings.admin_password),
+                is_admin=1,
+            )
+            db.add(admin)
+            db.commit()
+    finally:
+        db.close()
     try:
         model_store.load()
     except FileNotFoundError:
@@ -59,20 +74,55 @@ def get_current_user(
     return payload.get("sub", "unknown")
 
 
+def require_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> str:
+    payload = verify_token(credentials.credentials)
+    if payload.get("admin") != 1:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return payload.get("sub", "unknown")
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "model_loaded": model_store.model is not None}
 
 
 @app.post(f"/api/{settings.api_version}/login", response_model=LoginResponse)
-def login(payload: LoginRequest) -> LoginResponse:
-    if (
-        payload.username != settings.admin_username
-        or payload.password != settings.admin_password
-    ):
+def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
+    user = db.query(User).filter(User.username == payload.username).first()
+    if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_access_token(payload.username)
+    token = create_access_token(user.username, user.is_admin)
     return LoginResponse(access_token=token)
+
+
+@app.post(f"/api/{settings.api_version}/users", response_model=UserOut)
+def create_user(
+    payload: UserCreate,
+    _: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> UserOut:
+    existing = db.query(User).filter(User.username == payload.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    user = User(
+        username=payload.username,
+        password_hash=hash_password(payload.password),
+        is_admin=payload.is_admin,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.get(f"/api/{settings.api_version}/users", response_model=list[UserOut])
+def list_users(
+    _: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[UserOut]:
+    return db.query(User).order_by(User.id.asc()).all()
 
 
 @app.post(f"/api/{settings.api_version}/predict", response_model=PredictionResponse)

@@ -52,3 +52,13 @@ class AttritionScore(Base):
     risk_level = Column(String(12))
     prediction = Column(String(12))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(64), unique=True, index=True, nullable=False)
+    password_hash = Column(String(256), nullable=False)
+    is_admin = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
