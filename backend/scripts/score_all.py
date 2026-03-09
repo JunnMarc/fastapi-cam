@@ -13,7 +13,14 @@ if str(REPO_ROOT) not in sys.path:
 from backend.app.db import SessionLocal
 from backend.app.model import model_store
 from backend.app.models import AttritionScore, Customer
-from backend.app.main import risk_band, status_from_risk
+from backend.app.routers.customers import risk_band
+
+def status_from_risk(risk_level: str) -> str:
+    if risk_level == "High":
+        return "At-Risk"
+    if risk_level == "Low":
+        return "Safe"
+    return "Watch"
 
 
 def build_features(customer: Customer) -> dict:

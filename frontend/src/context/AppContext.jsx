@@ -8,6 +8,7 @@ export const AppProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("auth_token") || "");
   const [activePage, setActivePage] = useState("dashboard");
   const [activeModal, setActiveModal] = useState(null);
+  const [activeCustomerContext, setActiveCustomerContext] = useState(null);
   const [toasts, setToasts] = useState([]);
   
   const addToast = (message, type = "info") => {
@@ -95,6 +96,8 @@ export const AppProvider = ({ children }) => {
         setActivePage,
         activeModal,
         setActiveModal,
+        activeCustomerContext,
+        setActiveCustomerContext,
         customers,
         setCustomers,
         totalCustomers,

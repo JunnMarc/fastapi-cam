@@ -198,6 +198,8 @@ class RetentionCaseUpdate(BaseModel):
 class RetentionCaseOut(BaseModel):
     id: int
     customer_id: int
+    customer_name: str | None = None
+    customer_risk: str | None = None
     status: str
     owner: str | None
     priority: str

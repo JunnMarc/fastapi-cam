@@ -59,7 +59,7 @@ export default function Dashboard() {
         </div>
         <div className="summary-card">
           <p className="label">Portfolio</p>
-          <p className="value">{customers.length}</p>
+          <p className="value">{insights ? insights.total_customers : 0}</p>
           <p className="meta">Subscribers tracked</p>
         </div>
         <div className="summary-card">
@@ -68,9 +68,9 @@ export default function Dashboard() {
           <p className="meta">Access control status</p>
         </div>
         <div className="summary-card">
-          <p className="label">Latest Risk</p>
-          <p className="value">{result ? result.risk_level : "-"}</p>
-          <p className="meta">Most recent score</p>
+          <p className="label">Overall Risk Status</p>
+          <p className="value">{insights ? (insights.high_risk_rate > 0.3 ? "Critical" : insights.high_risk_rate > 0.15 ? "Moderate" : "Healthy") : "-"}</p>
+          <p className="meta">Based on portfolio risk rate</p>
         </div>
       </section>
 

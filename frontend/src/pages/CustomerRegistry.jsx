@@ -6,7 +6,7 @@ function formatPercent(value) {
 }
 
 export default function CustomerRegistry() {
-  const { customers, totalCustomers, loadingCustomers, loadCustomers, result, setResult, insights, loadInsights, token, API_BASE, authHeaders, addToast } = useAppContext();
+  const { customers, totalCustomers, loadingCustomers, loadCustomers, result, setResult, insights, loadInsights, token, API_BASE, authHeaders, addToast, setActiveModal, setActiveCustomerContext } = useAppContext();
   const [registryPage, setRegistryPage] = useState(1);
   const [registryPageSize, setRegistryPageSize] = useState(25);
   const [loading, setLoading] = useState(false);
@@ -148,14 +148,26 @@ export default function CustomerRegistry() {
                           : "-"}
                       </span>
                       <span role="cell">
-                        <button
-                          className="secondary"
-                          onClick={() => handleScore(c.id)}
-                          disabled={loading}
-                          type="button"
-                        >
-                          Score
-                        </button>
+                        <div className="table-actions">
+                          <button
+                            className="secondary"
+                            onClick={() => handleScore(c.id)}
+                            disabled={loading}
+                            type="button"
+                          >
+                            Score
+                          </button>
+                          <button
+                            className="ghost"
+                            onClick={() => {
+                              setActiveCustomerContext(c);
+                              setActiveModal("retention");
+                            }}
+                            type="button"
+                          >
+                            Create Case
+                          </button>
+                        </div>
                       </span>
                     </div>
                   ))
