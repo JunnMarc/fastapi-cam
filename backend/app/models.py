@@ -12,6 +12,12 @@ class Customer(Base):
     email = Column(String(120), nullable=True)
     segment = Column(String(80), nullable=True)
     status = Column(String(40), default="Active")
+    region = Column(String(80), nullable=True)
+    province = Column(String(80), nullable=True)
+    city = Column(String(80), nullable=True)
+    barangay = Column(String(120), nullable=True)
+    service_type = Column(String(40), nullable=True)
+    plan_type = Column(String(40), nullable=True)
 
     gender = Column(String(10))
     SeniorCitizen = Column(Integer)

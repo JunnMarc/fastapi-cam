@@ -1,4 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   color-scheme: light;
@@ -217,7 +220,7 @@ select {
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: 0.6fr 1fr 1fr 0.8fr 1fr 1fr;
+  grid-template-columns: 0.6fr 1fr 1fr 0.8fr 0.8fr 1fr 0.8fr;
   gap: 8px;
   align-items: center;
   padding: 10px 12px;
@@ -469,7 +472,6 @@ select {
   align-items: center;
 }
 
-
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -497,6 +499,87 @@ select {
 
 .summary-card:hover {
   border-color: var(--outline);
+}
+
+.insights {
+  display: grid;
+  gap: 16px;
+}
+
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.insight-card {
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid var(--outline);
+}
+
+.insight-list {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid var(--outline);
+  display: grid;
+  gap: 8px;
+}
+
+.insight-map {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid var(--outline);
+  display: grid;
+  gap: 10px;
+}
+
+.map-canvas {
+  width: 100%;
+  height: 320px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--outline);
+}
+
+.map-surface {
+  width: 100%;
+  height: 100%;
+}
+
+.marker-wrap {
+  transform: translateY(-6px);
+}
+
+.marker-dot {
+  width: 12px;
+  height: 12px;
+  background: #0b5cab;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+}
+
+.marker-label {
+  background: rgba(15, 23, 42, 0.9);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+}
+
+.marker-tooltip {
+  background: #111827;
+}
+
+.list-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: var(--muted);
 }
 
 .result {
@@ -556,5 +639,14 @@ select {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@layer base {
+  .maplibregl-popup-content {
+    @apply bg-transparent! shadow-none! p-0! rounded-none!;
+  }
+  .maplibregl-popup-tip {
+    @apply hidden!;
   }
 }

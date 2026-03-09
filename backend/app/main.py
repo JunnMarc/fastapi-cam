@@ -19,6 +19,8 @@ from .schemas import (
     LoginResponse,
     UserCreate,
     UserOut,
+    InsightsResponse,
+    InsightBucket,
 )
 from .db import get_db, engine, SessionLocal
 from .models import Base, Customer, AttritionScore, User
@@ -52,11 +54,32 @@ def load_model() -> None:
             db.commit()
     finally:
         db.close()
+    _ensure_customer_columns()
     try:
         model_store.load()
     except FileNotFoundError:
         # Defer loading until first request if model artifacts are missing.
         pass
+
+
+def _ensure_customer_columns() -> None:
+    columns = {
+        "region": "TEXT",
+        "province": "TEXT",
+        "city": "TEXT",
+        "barangay": "TEXT",
+        "service_type": "TEXT",
+        "plan_type": "TEXT",
+    }
+    with engine.connect() as conn:
+        existing = {
+            row[1] for row in conn.exec_driver_sql("PRAGMA table_info(customers)").fetchall()
+        }
+        for name, col_type in columns.items():
+            if name not in existing:
+                conn.exec_driver_sql(
+                    f"ALTER TABLE customers ADD COLUMN {name} {col_type}"
+                )
 
 
 def risk_band(probability: float) -> str:
@@ -267,6 +290,81 @@ def list_scores(
         .filter(AttritionScore.customer_id == customer_id)
         .order_by(AttritionScore.id.desc())
         .all()
+    )
+
+
+@app.get(f"/api/{settings.api_version}/insights", response_model=InsightsResponse)
+def insights(db: Session = Depends(get_db), _: str = Depends(get_current_user)) -> InsightsResponse:
+    customers = db.query(Customer).all()
+    total = len(customers)
+    if total == 0:
+        return InsightsResponse(
+            total_customers=0,
+            avg_monthly_charges=0.0,
+            avg_tenure=0.0,
+            high_risk_rate=0.0,
+            contract_mix=[],
+            internet_mix=[],
+            tenure_buckets=[],
+            risk_breakdown=[],
+            region_mix=[],
+            province_mix=[],
+            city_mix=[],
+            service_mix=[],
+            plan_mix=[],
+        )
+
+    avg_monthly = sum(c.MonthlyCharges or 0 for c in customers) / total
+    avg_tenure = sum(c.tenure or 0 for c in customers) / total
+
+    def count_by(getter):
+        counts = {}
+        for c in customers:
+            key = getter(c) or "Unknown"
+            counts[key] = counts.get(key, 0) + 1
+        return [InsightBucket(label=k, count=v) for k, v in sorted(counts.items())]
+
+    def tenure_bucket(value):
+        if value is None:
+            return "Unknown"
+        if value <= 12:
+            return "0-12"
+        if value <= 24:
+            return "13-24"
+        if value <= 48:
+            return "25-48"
+        if value <= 72:
+            return "49-72"
+        return "73+"
+
+    contract_mix = count_by(lambda c: c.Contract)
+    internet_mix = count_by(lambda c: c.InternetService)
+    tenure_buckets = count_by(lambda c: tenure_bucket(c.tenure))
+    risk_breakdown = count_by(lambda c: c.risk_level)
+    region_mix = count_by(lambda c: c.region)
+    province_mix = count_by(lambda c: c.province)
+    city_mix = count_by(lambda c: c.city)
+    service_mix = count_by(lambda c: c.service_type)
+    plan_mix = count_by(lambda c: c.plan_type)
+
+    high_risk = sum(1 for c in customers if c.risk_level == "High")
+    scored = sum(1 for c in customers if c.risk_level in {"High", "Medium", "Low"})
+    high_risk_rate = (high_risk / scored) if scored else 0.0
+
+    return InsightsResponse(
+        total_customers=total,
+        avg_monthly_charges=round(avg_monthly, 2),
+        avg_tenure=round(avg_tenure, 1),
+        high_risk_rate=round(high_risk_rate, 4),
+        contract_mix=contract_mix,
+        internet_mix=internet_mix,
+        tenure_buckets=tenure_buckets,
+        risk_breakdown=risk_breakdown,
+        region_mix=region_mix,
+        province_mix=province_mix,
+        city_mix=city_mix,
+        service_mix=service_mix,
+        plan_mix=plan_mix,
     )
 
 

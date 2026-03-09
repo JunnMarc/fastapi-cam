@@ -38,6 +38,12 @@ class CustomerCreate(CustomerFeatures):
     email: str | None = Field(default=None, examples=["alex@company.com"])
     segment: str | None = Field(default=None, examples=["SMB"])
     status: str | None = Field(default="Active", examples=["Active", "At-Risk"])
+    region: str | None = Field(default=None, examples=["NCR", "Region IV-A"])
+    province: str | None = Field(default=None, examples=["Laguna"])
+    city: str | None = Field(default=None, examples=["San Pedro"])
+    barangay: str | None = Field(default=None, examples=["United Bayanihan"])
+    service_type: str | None = Field(default=None, examples=["Mobile", "Fiber"])
+    plan_type: str | None = Field(default=None, examples=["Prepaid", "Postpaid"])
     notes: str | None = Field(default=None, examples=["VIP customer"])
 
 
@@ -46,6 +52,12 @@ class CustomerUpdate(BaseModel):
     email: str | None = None
     segment: str | None = None
     status: str | None = None
+    region: str | None = None
+    province: str | None = None
+    city: str | None = None
+    barangay: str | None = None
+    service_type: str | None = None
+    plan_type: str | None = None
     notes: str | None = None
 
 
@@ -56,6 +68,12 @@ class CustomerOut(BaseModel):
     email: str | None
     segment: str | None
     status: str | None
+    region: str | None
+    province: str | None
+    city: str | None
+    barangay: str | None
+    service_type: str | None
+    plan_type: str | None
     churn_probability: float | None
     risk_level: str | None
     last_prediction_at: datetime | None
@@ -129,3 +147,24 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class InsightBucket(BaseModel):
+    label: str
+    count: int
+
+
+class InsightsResponse(BaseModel):
+    total_customers: int
+    avg_monthly_charges: float
+    avg_tenure: float
+    high_risk_rate: float
+    contract_mix: list[InsightBucket]
+    internet_mix: list[InsightBucket]
+    tenure_buckets: list[InsightBucket]
+    risk_breakdown: list[InsightBucket]
+    region_mix: list[InsightBucket]
+    province_mix: list[InsightBucket]
+    city_mix: list[InsightBucket]
+    service_mix: list[InsightBucket]
+    plan_mix: list[InsightBucket]
