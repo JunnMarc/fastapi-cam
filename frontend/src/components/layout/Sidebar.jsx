@@ -11,7 +11,7 @@ export default function Sidebar() {
         <SidebarHeader>
           <div className="sidebar-brand">
             <FiShield />
-            <span>Risk Desk</span>
+            <span>Risk Desk CCMS</span>
           </div>
         </SidebarHeader>
         <SidebarContent>
