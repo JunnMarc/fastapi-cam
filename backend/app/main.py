@@ -22,9 +22,14 @@ from .schemas import (
     InsightsResponse,
     InsightBucket,
     InsightRiskBucket,
+    RetentionCaseCreate,
+    RetentionCaseUpdate,
+    RetentionCaseOut,
+    RetentionNoteCreate,
+    RetentionNoteOut,
 )
 from .db import get_db, engine, SessionLocal
-from .models import Base, Customer, AttritionScore, User
+from .models import Base, Customer, AttritionScore, User, RetentionCase, RetentionNote
 
 
 app = FastAPI(title=settings.app_name, version="1.0.0")
@@ -390,6 +395,88 @@ def insights(db: Session = Depends(get_db), _: str = Depends(get_current_user)) 
         region_high_risk=sorted(region_high_risk, key=lambda x: x.count, reverse=True),
         city_high_risk=sorted(city_high_risk, key=lambda x: x.count, reverse=True),
     )
+
+
+@app.get(f"/api/{settings.api_version}/retention-cases", response_model=list[RetentionCaseOut])
+def list_retention_cases(
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> list[RetentionCaseOut]:
+    return db.query(RetentionCase).order_by(RetentionCase.id.desc()).all()
+
+
+@app.post(f"/api/{settings.api_version}/retention-cases", response_model=RetentionCaseOut)
+def create_retention_case(
+    payload: RetentionCaseCreate,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> RetentionCaseOut:
+    existing = (
+        db.query(RetentionCase)
+        .filter(RetentionCase.customer_id == payload.customer_id)
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="Retention case already exists")
+    case = RetentionCase(**payload.model_dump())
+    db.add(case)
+    db.commit()
+    db.refresh(case)
+    return case
+
+
+@app.patch(f"/api/{settings.api_version}/retention-cases/{{case_id}}", response_model=RetentionCaseOut)
+def update_retention_case(
+    case_id: int,
+    payload: RetentionCaseUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> RetentionCaseOut:
+    case = db.query(RetentionCase).filter(RetentionCase.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Retention case not found")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(case, key, value)
+    db.commit()
+    db.refresh(case)
+    return case
+
+
+@app.get(
+    f"/api/{settings.api_version}/retention-cases/{{case_id}}/notes",
+    response_model=list[RetentionNoteOut],
+)
+def list_retention_notes(
+    case_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> list[RetentionNoteOut]:
+    return (
+        db.query(RetentionNote)
+        .filter(RetentionNote.case_id == case_id)
+        .order_by(RetentionNote.id.desc())
+        .all()
+    )
+
+
+@app.post(
+    f"/api/{settings.api_version}/retention-cases/{{case_id}}/notes",
+    response_model=RetentionNoteOut,
+)
+def create_retention_note(
+    case_id: int,
+    payload: RetentionNoteCreate,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> RetentionNoteOut:
+    case = db.query(RetentionCase).filter(RetentionCase.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Retention case not found")
+    note = RetentionNote(case_id=case_id, note=payload.note)
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return note
 
 
 @app.exception_handler(Exception)

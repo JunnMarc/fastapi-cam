@@ -176,3 +176,46 @@ class InsightsResponse(BaseModel):
     plan_mix: list[InsightBucket]
     region_high_risk: list[InsightRiskBucket]
     city_high_risk: list[InsightRiskBucket]
+
+
+class RetentionCaseCreate(BaseModel):
+    customer_id: int
+    status: str = "New"
+    owner: str | None = None
+    priority: str = "Medium"
+    next_action_date: datetime | None = None
+
+
+class RetentionCaseUpdate(BaseModel):
+    status: str | None = None
+    owner: str | None = None
+    priority: str | None = None
+    next_action_date: datetime | None = None
+
+
+class RetentionCaseOut(BaseModel):
+    id: int
+    customer_id: int
+    status: str
+    owner: str | None
+    priority: str
+    next_action_date: datetime | None
+    created_at: datetime | None
+    updated_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class RetentionNoteCreate(BaseModel):
+    note: str
+
+
+class RetentionNoteOut(BaseModel):
+    id: int
+    case_id: int
+    note: str
+    created_at: datetime | None
+
+    class Config:
+        from_attributes = True

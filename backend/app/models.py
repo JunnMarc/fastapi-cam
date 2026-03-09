@@ -68,3 +68,25 @@ class User(Base):
     password_hash = Column(String(256), nullable=False)
     is_admin = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class RetentionCase(Base):
+    __tablename__ = "retention_cases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, index=True)
+    status = Column(String(40), default="New")
+    owner = Column(String(120), nullable=True)
+    priority = Column(String(20), default="Medium")
+    next_action_date = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class RetentionNote(Base):
+    __tablename__ = "retention_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, index=True)
+    note = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -53,6 +53,22 @@ def load_dataset(path: Path) -> pd.DataFrame:
 def train(csv_path: Path, output_dir: Path) -> None:
     df = load_dataset(csv_path)
 
+    non_feature_columns = {
+        "customerID",
+        "external_id",
+        "name",
+        "email",
+        "segment",
+        "status",
+        "region",
+        "province",
+        "city",
+        "barangay",
+        "service_type",
+        "plan_type",
+        "notes",
+    }
+
     if "TotalCharges" not in df.columns:
         raise KeyError(
             "TotalCharges column not found. "
@@ -68,8 +84,21 @@ def train(csv_path: Path, output_dir: Path) -> None:
     df["TotalCharges"] = df["TotalCharges"].fillna(df["TotalCharges"].median())
     if "SeniorCitizen" in df.columns:
         df["SeniorCitizen"] = pd.to_numeric(df["SeniorCitizen"], errors="coerce").fillna(0).astype(int)
-    df = df.drop(columns=["customerID"], errors="ignore")
-    df["Churn"] = df["Churn"].map({"Yes": 1, "No": 0})
+    df = df.drop(columns=[c for c in non_feature_columns if c in df.columns], errors="ignore")
+
+    if "Churn" not in df.columns:
+        raise KeyError("Churn column not found. Check that the dataset has churn labels.")
+
+    if df["Churn"].dtype.kind in {"i", "u", "f"}:
+        df["Churn"] = df["Churn"].astype(int).clip(0, 1)
+    else:
+        df["Churn"] = (
+            df["Churn"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .map({"yes": 1, "no": 0, "1": 1, "0": 0})
+        )
 
     categorical_cols = df.select_dtypes(include=["object", "string"]).columns
     numerical_cols = ["tenure", "MonthlyCharges", "TotalCharges"]

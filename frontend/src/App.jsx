@@ -10,6 +10,7 @@ import {
 import {
   Map,
   MapControls,
+  MapClusterLayer,
   MapMarker,
   MarkerContent,
   MarkerLabel,
@@ -18,12 +19,14 @@ import {
 import regionsData from "@/data/psgc/regions.json";
 import provincesData from "@/data/psgc/provinces.json";
 import citiesData from "@/data/psgc/cities.json";
+import cityCentroids from "@/data/geo/city_centroids.json";
 import {
   FiUsers,
   FiGrid,
   FiPlusSquare,
   FiLogOut,
-  FiShield
+  FiShield,
+  FiClipboard
 } from "react-icons/fi";
 import "react-pro-sidebar/dist/css/styles.css";
 
@@ -86,6 +89,10 @@ function formatPercent(value) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function topBuckets(list, limit) {
+  return list ? [...list].sort((a, b) => b.count - a.count).slice(0, limit) : [];
+}
+
 const regionCoordinatesByCode = {
   "1300000000": [121.033, 14.5995],
   "1400000000": [120.573, 17.3513],
@@ -120,7 +127,19 @@ export default function App() {
   const [activeModal, setActiveModal] = useState(null);
   const [insights, setInsights] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
-  const [mapFilter, setMapFilter] = useState("all");
+  const [mapFilter, setMapFilter] = useState("regions");
+  const [retentionCases, setRetentionCases] = useState([]);
+  const [loadingRetention, setLoadingRetention] = useState(false);
+  const [retentionForm, setRetentionForm] = useState({
+    customer_id: "",
+    status: "New",
+    owner: "",
+    priority: "Medium",
+    next_action_date: ""
+  });
+  const [noteDrafts, setNoteDrafts] = useState({});
+  const [activeCaseNotes, setActiveCaseNotes] = useState([]);
+  const [activeCaseId, setActiveCaseId] = useState(null);
 
   const riskTone = useMemo(() => {
     if (!result) return "neutral";
@@ -210,6 +229,13 @@ export default function App() {
     }
     return map;
   }, []);
+  const cityCoordinatesByName = useMemo(() => {
+    const map = {};
+    for (const item of cityCentroids) {
+      map[item.name] = [item.lon, item.lat];
+    }
+    return map;
+  }, []);
   const loadCustomers = async () => {
     if (!token) return;
     setLoadingCustomers(true);
@@ -230,6 +256,7 @@ export default function App() {
     loadCustomers();
     loadUsers();
     loadInsights();
+    loadRetentionCases();
   }, [token]);
 
   const loadInsights = async () => {
@@ -264,6 +291,23 @@ export default function App() {
       setUsers(payload);
     } catch {
       // ignore
+    }
+  };
+
+  const loadRetentionCases = async () => {
+    if (!token) return;
+    setLoadingRetention(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/retention-cases`, {
+        headers: authHeaders
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      setRetentionCases(payload);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingRetention(false);
     }
   };
 
@@ -371,6 +415,97 @@ export default function App() {
     }
   };
 
+  const handleRetentionChange = (field) => (event) => {
+    const value = event.target.value;
+    setRetentionForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleCreateRetentionCase = async (event) => {
+    event.preventDefault();
+    setError("");
+    try {
+      const payload = {
+        ...retentionForm,
+        customer_id: Number(retentionForm.customer_id),
+        next_action_date: retentionForm.next_action_date
+          ? new Date(retentionForm.next_action_date).toISOString()
+          : null
+      };
+      const response = await fetch(`${API_BASE}/api/v1/retention-cases`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || "Retention case creation failed");
+      }
+      setRetentionForm({
+        customer_id: "",
+        status: "New",
+        owner: "",
+        priority: "Medium",
+        next_action_date: ""
+      });
+      await loadRetentionCases();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleUpdateCase = async (caseId, patch) => {
+    try {
+      await fetch(`${API_BASE}/api/v1/retention-cases/${caseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify(patch)
+      });
+      await loadRetentionCases();
+    } catch {
+      // ignore
+    }
+  };
+
+  const loadNotes = async (caseId) => {
+    setActiveCaseId(caseId);
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v1/retention-cases/${caseId}/notes`,
+        { headers: authHeaders }
+      );
+      if (!response.ok) return;
+      const payload = await response.json();
+      setActiveCaseNotes(payload);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleNoteChange = (caseId) => (event) => {
+    const value = event.target.value;
+    setNoteDrafts((prev) => ({ ...prev, [caseId]: value }));
+  };
+
+  const handleAddNote = async (caseId) => {
+    const note = noteDrafts[caseId];
+    if (!note) return;
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v1/retention-cases/${caseId}/notes`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders },
+          body: JSON.stringify({ note })
+        }
+      );
+      if (!response.ok) return;
+      setNoteDrafts((prev) => ({ ...prev, [caseId]: "" }));
+      await loadNotes(caseId);
+    } catch {
+      // ignore
+    }
+  };
+
   const handleScore = async (id) => {
     setLoading(true);
     setError("");
@@ -412,6 +547,9 @@ export default function App() {
                 </MenuItem>
                 <MenuItem icon={<FiPlusSquare />} onClick={() => setActiveModal("intake")}>
                   New Intake
+                </MenuItem>
+                <MenuItem icon={<FiClipboard />} onClick={() => setActiveModal("retention")}>
+                  Retention Workflow
                 </MenuItem>
                 <MenuItem icon={<FiUsers />} onClick={() => setActiveModal("users")}>
                   User Management
@@ -542,7 +680,7 @@ export default function App() {
                 </div>
                 <div className="insight-list">
                   <p className="label">Region Mix</p>
-                  {insights.region_mix.map((b) => (
+                  {topBuckets(insights.region_mix, 10).map((b) => (
                     <div className="list-row" key={`region-${b.label}`}>
                       <span>{b.label}</span>
                       <span>{b.count}</span>
@@ -551,7 +689,7 @@ export default function App() {
                 </div>
                 <div className="insight-list">
                   <p className="label">Province Mix</p>
-                  {insights.province_mix.map((b) => (
+                  {topBuckets(insights.province_mix, 10).map((b) => (
                     <div className="list-row" key={`province-${b.label}`}>
                       <span>{b.label}</span>
                       <span>{b.count}</span>
@@ -560,7 +698,7 @@ export default function App() {
                 </div>
                 <div className="insight-list">
                   <p className="label">City Mix</p>
-                  {insights.city_mix.map((b) => (
+                  {topBuckets(insights.city_mix, 12).map((b) => (
                     <div className="list-row" key={`city-${b.label}`}>
                       <span>{b.label}</span>
                       <span>{b.count}</span>
@@ -569,7 +707,7 @@ export default function App() {
                 </div>
                 <div className="insight-list">
                   <p className="label">Service Mix</p>
-                  {insights.service_mix.map((b) => (
+                  {topBuckets(insights.service_mix, 8).map((b) => (
                     <div className="list-row" key={`service-${b.label}`}>
                       <span>{b.label}</span>
                       <span>{b.count}</span>
@@ -578,7 +716,7 @@ export default function App() {
                 </div>
                 <div className="insight-list">
                   <p className="label">Plan Mix</p>
-                  {insights.plan_mix.map((b) => (
+                  {topBuckets(insights.plan_mix, 8).map((b) => (
                     <div className="list-row" key={`plan-${b.label}`}>
                       <span>{b.label}</span>
                       <span>{b.count}</span>
@@ -618,18 +756,25 @@ export default function App() {
                     <p className="label">Geography Map</p>
                     <div className="map-filters">
                       <button
-                        className={mapFilter === "all" ? "chip active" : "chip"}
-                        onClick={() => setMapFilter("all")}
+                        className={mapFilter === "regions" ? "chip active" : "chip"}
+                        onClick={() => setMapFilter("regions")}
                         type="button"
                       >
-                        All Regions
+                        Regions
                       </button>
                       <button
-                        className={mapFilter === "high" ? "chip active" : "chip"}
-                        onClick={() => setMapFilter("high")}
+                        className={mapFilter === "regions_high" ? "chip active" : "chip"}
+                        onClick={() => setMapFilter("regions_high")}
                         type="button"
                       >
-                        High Risk
+                        High Risk Regions
+                      </button>
+                      <button
+                        className={mapFilter === "cities_high" ? "chip active" : "chip"}
+                        onClick={() => setMapFilter("cities_high")}
+                        type="button"
+                      >
+                        High Risk Cities
                       </button>
                     </div>
                   </div>
@@ -643,44 +788,83 @@ export default function App() {
                       className="map-surface"
                     >
                       <MapControls position="top-right" showLocate={false} />
-                      {(mapFilter === "high"
-                        ? insights.region_high_risk
-                        : insights.region_mix
-                      )
-                        .slice()
-                        .sort((a, b) => b.count - a.count)
-                        .slice(0, 8)
-                        .map((region) => {
-                          const coords = regionCoordinatesByName[region.label];
-                          if (!coords) return null;
-                          const isHigh = mapFilter === "high";
-                          return (
-                            <MapMarker
-                              key={`map-${region.label}`}
-                              longitude={coords[0]}
-                              latitude={coords[1]}
-                            >
-                              <MarkerContent className="marker-wrap">
-                                <div className={isHigh ? "marker-dot high" : "marker-dot"} />
-                              </MarkerContent>
-                              <MarkerLabel className="marker-label">
-                                {region.label}
-                              </MarkerLabel>
-                              <MarkerTooltip className="marker-tooltip">
-                                {region.label}: {region.count}
-                                {typeof region.rate === "number"
-                                  ? ` (${formatPercent(region.rate)})`
-                                  : ""}
-                              </MarkerTooltip>
-                            </MapMarker>
-                          );
-                        })}
+                      {mapFilter === "cities_high" ? (
+                        <MapClusterLayer
+                          data={{
+                            type: "FeatureCollection",
+                            features: insights.city_high_risk
+                              .filter((c) => c.count > 0)
+                              .map((item) => {
+                                const coords = cityCoordinatesByName[item.label];
+                                if (!coords) return null;
+                                return {
+                                  type: "Feature",
+                                  properties: {
+                                    label: item.label,
+                                    count: item.count,
+                                    rate: item.rate
+                                  },
+                                  geometry: {
+                                    type: "Point",
+                                    coordinates: coords
+                                  }
+                                };
+                              })
+                              .filter(Boolean)
+                          }}
+                          clusterColors={["#0b5cab", "#f59e0b", "#b91c1c"]}
+                          pointColor="#b91c1c"
+                        />
+                      ) : (
+                        (mapFilter === "regions_high"
+                          ? insights.region_high_risk
+                          : insights.region_mix
+                        )
+                          .filter(
+                            (item) =>
+                              mapFilter === "regions" || (item.count ?? 0) > 0
+                          )
+                          .slice()
+                          .sort((a, b) => b.count - a.count)
+                          .slice(0, 8)
+                          .map((item) => {
+                            const coords = regionCoordinatesByName[item.label];
+                            if (!coords) return null;
+                            const isHigh = mapFilter !== "regions";
+                            return (
+                              <MapMarker
+                                key={`map-${item.label}`}
+                                longitude={coords[0]}
+                                latitude={coords[1]}
+                              >
+                                <MarkerContent className="marker-wrap">
+                                  <div className={isHigh ? "marker-dot high" : "marker-dot"} />
+                                </MarkerContent>
+                                <MarkerLabel className="marker-label">
+                                  {item.label}
+                                </MarkerLabel>
+                                <MarkerTooltip className="marker-tooltip">
+                                  {item.label}: {item.count}
+                                  {typeof item.rate === "number"
+                                    ? ` (${formatPercent(item.rate)})`
+                                    : ""}
+                                </MarkerTooltip>
+                              </MapMarker>
+                            );
+                          })
+                      )}
                     </Map>
                   </div>
                   <div className="map-legend">
-                    <span className={mapFilter === "high" ? "legend-dot high" : "legend-dot"} />
+                    <span
+                      className={
+                        mapFilter === "regions" ? "legend-dot" : "legend-dot high"
+                      }
+                    />
                     <span className="legend-text">
-                      {mapFilter === "high" ? "High-risk subscribers" : "Total subscribers"}
+                      {mapFilter === "regions"
+                        ? "Total subscribers"
+                        : "High-risk subscribers"}
                     </span>
                   </div>
                 </div>
@@ -765,7 +949,9 @@ export default function App() {
                     ? "User Management"
                     : activeModal === "customers"
                       ? "Customer Registry"
-                      : "Customer Intake"}
+                      : activeModal === "retention"
+                        ? "Retention Workflow"
+                        : "Customer Intake"}
               </h3>
               <button className="secondary" onClick={() => setActiveModal(null)}>
                 Close
@@ -918,6 +1104,151 @@ export default function App() {
                       ))
                     )}
                   </div>
+                )}
+              </div>
+            ) : null}
+
+            {activeModal === "retention" ? (
+              <div className="modal-body">
+                {token ? (
+                  <>
+                    <form className="retention-form" onSubmit={handleCreateRetentionCase}>
+                      <select
+                        value={retentionForm.customer_id}
+                        onChange={handleRetentionChange("customer_id")}
+                        required
+                      >
+                        <option value="">Select customer</option>
+                        {customers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            #{c.id} - {c.region || "Region"} / {c.city || "City"}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={retentionForm.status}
+                        onChange={handleRetentionChange("status")}
+                      >
+                        <option value="New">New</option>
+                        <option value="In Review">In Review</option>
+                        <option value="Contacted">Contacted</option>
+                        <option value="Resolved">Resolved</option>
+                      </select>
+                      <select
+                        value={retentionForm.priority}
+                        onChange={handleRetentionChange("priority")}
+                      >
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                      </select>
+                      <input
+                        placeholder="Owner"
+                        value={retentionForm.owner}
+                        onChange={handleRetentionChange("owner")}
+                      />
+                      <input
+                        type="date"
+                        value={retentionForm.next_action_date}
+                        onChange={handleRetentionChange("next_action_date")}
+                      />
+                      <button className="secondary" type="submit">
+                        Create Case
+                      </button>
+                    </form>
+
+                    {loadingRetention ? (
+                      <p>Loading cases...</p>
+                    ) : (
+                      <div className="retention-list">
+                        {retentionCases.length === 0 ? (
+                          <p>No retention cases yet.</p>
+                        ) : (
+                          retentionCases.map((rc) => (
+                            <div className="retention-item" key={rc.id}>
+                              <div className="retention-header">
+                                <div>
+                                  <p className="label">Case #{rc.id}</p>
+                                  <p className="value">Customer {rc.customer_id}</p>
+                                </div>
+                                <div className="retention-actions">
+                                  <select
+                                    value={rc.status}
+                                    onChange={(e) =>
+                                      handleUpdateCase(rc.id, { status: e.target.value })
+                                    }
+                                  >
+                                    <option value="New">New</option>
+                                    <option value="In Review">In Review</option>
+                                    <option value="Contacted">Contacted</option>
+                                    <option value="Resolved">Resolved</option>
+                                  </select>
+                                  <select
+                                    value={rc.priority}
+                                    onChange={(e) =>
+                                      handleUpdateCase(rc.id, { priority: e.target.value })
+                                    }
+                                  >
+                                    <option value="Low">Low</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="High">High</option>
+                                  </select>
+                                  <button
+                                    className="ghost"
+                                    type="button"
+                                    onClick={() => loadNotes(rc.id)}
+                                  >
+                                    Notes
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="retention-meta">
+                                <span>Owner: {rc.owner || "Unassigned"}</span>
+                                <span>
+                                  Next Action:{" "}
+                                  {rc.next_action_date
+                                    ? new Date(rc.next_action_date).toLocaleDateString()
+                                    : "-"}
+                                </span>
+                              </div>
+                              {activeCaseId === rc.id ? (
+                                <div className="retention-notes">
+                                  <div className="note-input">
+                                    <input
+                                      placeholder="Add note"
+                                      value={noteDrafts[rc.id] || ""}
+                                      onChange={handleNoteChange(rc.id)}
+                                    />
+                                    <button
+                                      className="secondary"
+                                      type="button"
+                                      onClick={() => handleAddNote(rc.id)}
+                                    >
+                                      Add
+                                    </button>
+                                  </div>
+                                  <div className="note-list">
+                                    {activeCaseNotes.map((note) => (
+                                      <div className="note-item" key={note.id}>
+                                        <span>{note.note}</span>
+                                        <span className="note-time">
+                                          {note.created_at
+                                            ? new Date(note.created_at).toLocaleString()
+                                            : ""}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p>Login required.</p>
                 )}
               </div>
             ) : null}
