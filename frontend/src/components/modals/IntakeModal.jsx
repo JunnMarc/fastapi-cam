@@ -124,7 +124,12 @@ export default function IntakeModal() {
   };
 
   const handleSubmit = async (event) => {
-    event.preventDefault();
+    event?.preventDefault?.();
+    if (step < totalSteps) {
+      nextStep();
+      return;
+    }
+
     setLoading(true);
     setResult(null);
 
@@ -241,6 +246,50 @@ export default function IntakeModal() {
             </div>
           )}
 
+          {step === 2 && (
+            <div className="form-grid" aria-live="polite">
+              <div className="field full">
+                <h5>Step 2: Demographics & Profile</h5>
+                <p className="meta">Basic customer information and relationship status.</p>
+              </div>
+              <div className="field">
+                <label htmlFor="intake-gender">Gender</label>
+                <select id="intake-gender" value={form.gender} onChange={handleChange("gender")}>
+                  {selectOptions.gender.map((opt) => (
+                    <option key={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="intake-senior">Senior Citizen</label>
+                <select id="intake-senior" value={form.SeniorCitizen} onChange={handleChange("SeniorCitizen")}>
+                  <option value={0}>0 - No</option>
+                  <option value={1}>1 - Yes</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="intake-partner">Partner</label>
+                <select id="intake-partner" value={form.Partner} onChange={handleChange("Partner")}>
+                  {selectOptions.Partner.map((opt) => (
+                    <option key={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="intake-dependents">Dependents</label>
+                <select id="intake-dependents" value={form.Dependents} onChange={handleChange("Dependents")}>
+                  {selectOptions.Dependents.map((opt) => (
+                    <option key={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="intake-tenure">Tenure (months)</label>
+                <input id="intake-tenure" type="number" min="0" value={form.tenure} onChange={handleChange("tenure")} />
+              </div>
+            </div>
+          )}
+
           {step === 3 && (
             <div className="form-grid" aria-live="polite">
               <div className="field full">
@@ -335,7 +384,7 @@ export default function IntakeModal() {
               Next Step
             </button>
           ) : (
-            <button className="primary" type="submit" disabled={loading} style={{ marginLeft: "auto" }}>
+            <button className="primary" type="button" onClick={handleSubmit} disabled={loading} style={{ marginLeft: "auto" }}>
               {loading ? "Saving..." : "Create & Score"}
             </button>
           )}
