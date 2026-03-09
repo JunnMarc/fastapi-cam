@@ -57,14 +57,20 @@ def score_batch(
     count = 0
     for customer in customers:
         features = build_features(customer)
-        prediction, probability = model_store.predict(features)
-        level = risk_band(probability)
-        result = "CHURN" if prediction == 1 else "STAY"
+        if customer.status == "Retained":
+            probability = 0.0
+            prediction = 0
+            level = "Low"
+            result = "STAY"
+        else:
+            prediction, probability = model_store.predict(features)
+            level = risk_band(probability)
+            result = "CHURN" if prediction == 1 else "STAY"
+            customer.status = status_from_risk(level)
 
         customer.churn_probability = probability
         customer.risk_level = level
         customer.last_prediction_at = now
-        customer.status = status_from_risk(level)
         session.add(customer)
 
         if write_history:

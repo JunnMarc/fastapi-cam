@@ -123,10 +123,19 @@ def score_customer(
         "TotalCharges": customer.TotalCharges,
     }
 
-    prediction, probability = model_store.predict(features)
-    explanation = model_store.explain(features)
-    level = risk_band(probability)
-    result = "CHURN" if prediction == 1 else "STAY"
+    if customer.status == "Retained":
+        probability = 0.0
+        prediction = 0
+        explanation = {"drivers": [], "protectors": []}
+        level = "Low"
+        result = "STAY"
+    else:
+        prediction, probability = model_store.predict(features)
+        explanation = model_store.explain(features)
+        level = risk_band(probability)
+        result = "CHURN" if prediction == 1 else "STAY"
+        customer.status = "At-Risk" if level == "High" else "Safe" if level == "Low" else "Watch"
+
 
     customer.churn_probability = probability
     customer.risk_level = level
