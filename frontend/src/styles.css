@@ -644,6 +644,7 @@ select {
   border-radius: 14px;
   padding: 16px;
   border: 1px solid var(--outline);
+  align-self: start;
 }
 
 .insight-list {

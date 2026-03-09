@@ -11,19 +11,26 @@ router = APIRouter(prefix=f"/api/{settings.api_version}/retention-cases", tags=[
 
 @router.get("", response_model=list[RetentionCaseOut])
 def list_retention_cases(
+    customer_id: int | None = None,
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> list[RetentionCaseOut]:
-    cases = (
+    query = (
         db.query(
             RetentionCase,
             Customer.name.label("customer_name"),
             Customer.risk_level.label("customer_risk"),
         )
         .outerjoin(Customer, RetentionCase.customer_id == Customer.id)
-        .order_by(RetentionCase.id.desc())
+    )
+    
+    if customer_id is not None:
+        query = query.filter(RetentionCase.customer_id == customer_id)
+
+    cases = (
+        query.order_by(RetentionCase.id.desc())
         .offset(offset)
         .limit(limit)
         .all()

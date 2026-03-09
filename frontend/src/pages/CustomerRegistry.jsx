@@ -150,6 +150,16 @@ export default function CustomerRegistry() {
                       <span role="cell">
                         <div className="table-actions">
                           <button
+                            className="ghost"
+                            onClick={() => {
+                              setActiveCustomerContext(c);
+                              setActiveModal("customer_detail");
+                            }}
+                            type="button"
+                          >
+                            View
+                          </button>
+                          <button
                             className="secondary"
                             onClick={() => handleScore(c.id)}
                             disabled={loading}

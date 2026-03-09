@@ -4,6 +4,7 @@ import LoginModal from "./LoginModal";
 import UserManagementModal from "./UserManagementModal";
 import RetentionModal from "./RetentionModal";
 import IntakeModal from "./IntakeModal";
+import CustomerDetailModal from "./CustomerDetailModal";
 
 export default function ModalWrapper() {
   const { activeModal, setActiveModal } = useAppContext();
@@ -16,6 +17,7 @@ export default function ModalWrapper() {
     if (activeModal === "customers") return "Customer Registry";
     if (activeModal === "retention") return "Retention Workflow";
     if (activeModal === "intake") return "Customer Intake";
+    if (activeModal === "customer_detail") return "Customer 360 Overview";
     return "";
   }, [activeModal]);
 
@@ -95,6 +97,7 @@ export default function ModalWrapper() {
         {activeModal === "users" && <UserManagementModal />}
         {activeModal === "retention" && <RetentionModal />}
         {activeModal === "intake" && <IntakeModal />}
+        {activeModal === "customer_detail" && <CustomerDetailModal />}
       </div>
     </div>
   );
