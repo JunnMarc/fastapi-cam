@@ -154,6 +154,12 @@ class InsightBucket(BaseModel):
     count: int
 
 
+class InsightRiskBucket(BaseModel):
+    label: str
+    count: int
+    rate: float
+
+
 class InsightsResponse(BaseModel):
     total_customers: int
     avg_monthly_charges: float
@@ -168,3 +174,5 @@ class InsightsResponse(BaseModel):
     city_mix: list[InsightBucket]
     service_mix: list[InsightBucket]
     plan_mix: list[InsightBucket]
+    region_high_risk: list[InsightRiskBucket]
+    city_high_risk: list[InsightRiskBucket]

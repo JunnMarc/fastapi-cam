@@ -21,6 +21,7 @@ from .schemas import (
     UserOut,
     InsightsResponse,
     InsightBucket,
+    InsightRiskBucket,
 )
 from .db import get_db, engine, SessionLocal
 from .models import Base, Customer, AttritionScore, User
@@ -312,6 +313,8 @@ def insights(db: Session = Depends(get_db), _: str = Depends(get_current_user)) 
             city_mix=[],
             service_mix=[],
             plan_mix=[],
+            region_high_risk=[],
+            city_high_risk=[],
         )
 
     avg_monthly = sum(c.MonthlyCharges or 0 for c in customers) / total
@@ -323,6 +326,23 @@ def insights(db: Session = Depends(get_db), _: str = Depends(get_current_user)) 
             key = getter(c) or "Unknown"
             counts[key] = counts.get(key, 0) + 1
         return [InsightBucket(label=k, count=v) for k, v in sorted(counts.items())]
+
+    def risk_by(getter):
+        totals = {}
+        highs = {}
+        for c in customers:
+            key = getter(c) or "Unknown"
+            totals[key] = totals.get(key, 0) + 1
+            if c.risk_level == "High":
+                highs[key] = highs.get(key, 0) + 1
+        results = []
+        for key, total_count in totals.items():
+            high_count = highs.get(key, 0)
+            rate = (high_count / total_count) if total_count else 0.0
+            results.append(
+                InsightRiskBucket(label=key, count=high_count, rate=round(rate, 4))
+            )
+        return results
 
     def tenure_bucket(value):
         if value is None:
@@ -346,6 +366,8 @@ def insights(db: Session = Depends(get_db), _: str = Depends(get_current_user)) 
     city_mix = count_by(lambda c: c.city)
     service_mix = count_by(lambda c: c.service_type)
     plan_mix = count_by(lambda c: c.plan_type)
+    region_high_risk = risk_by(lambda c: c.region)
+    city_high_risk = risk_by(lambda c: c.city)
 
     high_risk = sum(1 for c in customers if c.risk_level == "High")
     scored = sum(1 for c in customers if c.risk_level in {"High", "Medium", "Low"})
@@ -365,6 +387,8 @@ def insights(db: Session = Depends(get_db), _: str = Depends(get_current_user)) 
         city_mix=city_mix,
         service_mix=service_mix,
         plan_mix=plan_mix,
+        region_high_risk=sorted(region_high_risk, key=lambda x: x.count, reverse=True),
+        city_high_risk=sorted(city_high_risk, key=lambda x: x.count, reverse=True),
     )
 
 

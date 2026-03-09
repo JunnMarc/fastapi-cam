@@ -120,6 +120,7 @@ export default function App() {
   const [activeModal, setActiveModal] = useState(null);
   const [insights, setInsights] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
+  const [mapFilter, setMapFilter] = useState("all");
 
   const riskTone = useMemo(() => {
     if (!result) return "neutral";
@@ -209,7 +210,6 @@ export default function App() {
     }
     return map;
   }, []);
-
   const loadCustomers = async () => {
     if (!token) return;
     setLoadingCustomers(true);
@@ -585,8 +585,54 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+                <div className="insight-list">
+                  <p className="label">Top Regions by High Risk</p>
+                  {insights.region_high_risk
+                    .filter((b) => b.count > 0)
+                    .slice(0, 5)
+                    .map((b) => (
+                      <div className="list-row" key={`high-region-${b.label}`}>
+                        <span>{b.label}</span>
+                        <span>
+                          {b.count} ({formatPercent(b.rate)})
+                        </span>
+                      </div>
+                    ))}
+                </div>
+                <div className="insight-list">
+                  <p className="label">Top Cities by High Risk</p>
+                  {insights.city_high_risk
+                    .filter((b) => b.count > 0)
+                    .slice(0, 5)
+                    .map((b) => (
+                      <div className="list-row" key={`high-city-${b.label}`}>
+                        <span>{b.label}</span>
+                        <span>
+                          {b.count} ({formatPercent(b.rate)})
+                        </span>
+                      </div>
+                    ))}
+                </div>
                 <div className="insight-map">
-                  <p className="label">Geography Map</p>
+                  <div className="map-header">
+                    <p className="label">Geography Map</p>
+                    <div className="map-filters">
+                      <button
+                        className={mapFilter === "all" ? "chip active" : "chip"}
+                        onClick={() => setMapFilter("all")}
+                        type="button"
+                      >
+                        All Regions
+                      </button>
+                      <button
+                        className={mapFilter === "high" ? "chip active" : "chip"}
+                        onClick={() => setMapFilter("high")}
+                        type="button"
+                      >
+                        High Risk
+                      </button>
+                    </div>
+                  </div>
                   <div className="map-canvas">
                     <Map
                       center={[121.774, 12.8797]}
@@ -597,13 +643,17 @@ export default function App() {
                       className="map-surface"
                     >
                       <MapControls position="top-right" showLocate={false} />
-                      {insights.region_mix
+                      {(mapFilter === "high"
+                        ? insights.region_high_risk
+                        : insights.region_mix
+                      )
                         .slice()
                         .sort((a, b) => b.count - a.count)
                         .slice(0, 8)
                         .map((region) => {
                           const coords = regionCoordinatesByName[region.label];
                           if (!coords) return null;
+                          const isHigh = mapFilter === "high";
                           return (
                             <MapMarker
                               key={`map-${region.label}`}
@@ -611,18 +661,27 @@ export default function App() {
                               latitude={coords[1]}
                             >
                               <MarkerContent className="marker-wrap">
-                                <div className="marker-dot" />
+                                <div className={isHigh ? "marker-dot high" : "marker-dot"} />
                               </MarkerContent>
                               <MarkerLabel className="marker-label">
                                 {region.label}
                               </MarkerLabel>
                               <MarkerTooltip className="marker-tooltip">
                                 {region.label}: {region.count}
+                                {typeof region.rate === "number"
+                                  ? ` (${formatPercent(region.rate)})`
+                                  : ""}
                               </MarkerTooltip>
                             </MapMarker>
                           );
                         })}
                     </Map>
+                  </div>
+                  <div className="map-legend">
+                    <span className={mapFilter === "high" ? "legend-dot high" : "legend-dot"} />
+                    <span className="legend-text">
+                      {mapFilter === "high" ? "High-risk subscribers" : "Total subscribers"}
+                    </span>
                   </div>
                 </div>
               </div>
