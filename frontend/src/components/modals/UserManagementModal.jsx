@@ -2,10 +2,9 @@ import { useState, useEffect } from "react";
 import { useAppContext } from "../../context/AppContext";
 
 export default function UserManagementModal() {
-  const { token, authHeaders, API_BASE } = useAppContext();
+  const { token, authHeaders, API_BASE, addToast } = useAppContext();
   const [users, setUsers] = useState([]);
   const [userForm, setUserForm] = useState({ username: "", password: "", is_admin: 0 });
-  const [error, setError] = useState("");
 
   const loadUsers = async () => {
     if (!token) return;
@@ -18,6 +17,8 @@ export default function UserManagementModal() {
       setUsers(payload);
     } catch {
       // ignore
+    } finally {
+      // Add a slight delay if needed to simulate network, but we assume it's fast.
     }
   };
 
@@ -35,7 +36,6 @@ export default function UserManagementModal() {
 
   const handleCreateUser = async (event) => {
     event.preventDefault();
-    setError("");
     try {
       const response = await fetch(`${API_BASE}/api/v1/users`, {
         method: "POST",
@@ -48,8 +48,9 @@ export default function UserManagementModal() {
       }
       setUserForm({ username: "", password: "", is_admin: 0 });
       await loadUsers();
+      addToast("User created successfully", "success");
     } catch (err) {
-      setError(err.message);
+      addToast(err.message, "error");
     }
   };
 
@@ -83,7 +84,6 @@ export default function UserManagementModal() {
               Create User
             </button>
           </form>
-          {error && <p className="error" role="alert">{error}</p>}
           <div className="table" role="table" aria-label="Users">
             <div className="table-head" role="row">
               <span role="columnheader">ID</span>

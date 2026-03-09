@@ -6,11 +6,10 @@ function formatPercent(value) {
 }
 
 export default function CustomerRegistry() {
-  const { customers, totalCustomers, loadingCustomers, loadCustomers, result, setResult, insights, loadInsights, token, API_BASE, authHeaders } = useAppContext();
+  const { customers, totalCustomers, loadingCustomers, loadCustomers, result, setResult, insights, loadInsights, token, API_BASE, authHeaders, addToast } = useAppContext();
   const [registryPage, setRegistryPage] = useState(1);
   const [registryPageSize, setRegistryPageSize] = useState(25);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     setRegistryPage(1);
@@ -24,7 +23,6 @@ export default function CustomerRegistry() {
 
   const handleScore = async (id) => {
     setLoading(true);
-    setError("");
     try {
       const response = await fetch(`${API_BASE}/api/v1/customers/${id}/score`, {
         method: "POST",
@@ -38,10 +36,9 @@ export default function CustomerRegistry() {
       setResult(payload);
       
       const offset = (registryPage - 1) * registryPageSize;
-      await loadCustomers(registryPageSize, offset);
-      await loadInsights();
+      addToast("Customer scored successfully!", "success");
     } catch (err) {
-      setError(err.message);
+      addToast(err.message, "error");
     } finally {
       setLoading(false);
     }
@@ -100,8 +97,6 @@ export default function CustomerRegistry() {
         </div>
       </section>
 
-      {error ? <p className="error" role="alert">{error}</p> : null}
-
       <section className="registry-layout">
         <div className="panel registry-table">
           <div className="panel-header">
@@ -109,9 +104,20 @@ export default function CustomerRegistry() {
             <p>Score customers to refresh risk drivers and probability.</p>
           </div>
           {loadingCustomers ? (
-            <p role="status" aria-live="polite">
-              Loading customers...
-            </p>
+            <div className="table" role="table" aria-label="Loading Customers">
+              <div className="table-head" role="row">
+                <span role="columnheader">ID</span>
+                <span role="columnheader">Region</span>
+                <span role="columnheader">City</span>
+                <span role="columnheader">Status</span>
+                <span role="columnheader">Risk</span>
+                <span role="columnheader">Probability</span>
+                <span role="columnheader">Actions</span>
+              </div>
+              {[...Array(5)].map((_, i) => (
+                <div className="skeleton skeleton-table-row" key={i}></div>
+              ))}
+            </div>
           ) : (
             <>
               <div className="table" role="table" aria-label="Customers">

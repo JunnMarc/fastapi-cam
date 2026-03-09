@@ -8,6 +8,17 @@ export const AppProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("auth_token") || "");
   const [activePage, setActivePage] = useState("dashboard");
   const [activeModal, setActiveModal] = useState(null);
+  const [toasts, setToasts] = useState([]);
+  
+  const addToast = (message, type = "info") => {
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => removeToast(id), 5000);
+  };
+
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
   
   const [customers, setCustomers] = useState([]);
   const [totalCustomers, setTotalCustomers] = useState(0);
@@ -98,6 +109,9 @@ export const AppProvider = ({ children }) => {
         handleLogout,
         authHeaders,
         API_BASE,
+        toasts,
+        addToast,
+        removeToast,
       }}
     >
       {children}

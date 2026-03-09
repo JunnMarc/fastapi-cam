@@ -2,10 +2,9 @@ import { useState } from "react";
 import { useAppContext } from "../../context/AppContext";
 
 export default function LoginModal() {
-  const { setToken, setActiveModal, API_BASE } = useAppContext();
+  const { setToken, setActiveModal, API_BASE, addToast } = useAppContext();
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const handleLoginChange = (field) => (event) => {
     setLoginForm((prev) => ({ ...prev, [field]: event.target.value }));
@@ -14,7 +13,6 @@ export default function LoginModal() {
   const handleLogin = async (event) => {
     event.preventDefault();
     setLoading(true);
-    setError("");
     try {
       const response = await fetch(`${API_BASE}/api/v1/login`, {
         method: "POST",
@@ -29,8 +27,9 @@ export default function LoginModal() {
       localStorage.setItem("auth_token", payload.access_token);
       setToken(payload.access_token);
       setActiveModal(null);
+      addToast(`Welcome back, ${loginForm.username}!`, "success");
     } catch (err) {
-      setError(err.message);
+      addToast(err.message, "error");
     } finally {
       setLoading(false);
     }
@@ -72,11 +71,6 @@ export default function LoginModal() {
           </button>
         </form>
       </div>
-      {error ? (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import Topbar from "./components/layout/Topbar";
 import Dashboard from "./pages/Dashboard";
 import CustomerRegistry from "./pages/CustomerRegistry";
 import ModalWrapper from "./components/modals/ModalWrapper";
+import ToastContainer from "./components/layout/ToastContainer";
 import "react-pro-sidebar/dist/css/styles.css";
 
 function AppContent() {
@@ -44,6 +45,7 @@ function AppContent() {
       </main>
 
       <ModalWrapper />
+      <ToastContainer />
     </div>
   );
 }

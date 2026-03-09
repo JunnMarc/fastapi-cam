@@ -308,6 +308,9 @@ select {
 .table {
   display: grid;
   gap: 10px;
+  max-height: 480px;
+  overflow-y: auto;
+  position: relative;
 }
 
 .table-head,
@@ -326,17 +329,35 @@ select {
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-radius: 8px 8px 0 0;
 }
 
 .table-row {
   background: #ffffff;
   border: 1px solid var(--outline);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.table-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--shadow);
+  border-color: var(--accent);
 }
 
 .table-row.empty {
   grid-template-columns: 1fr;
   text-align: center;
   color: var(--muted);
+  padding: 40px;
+}
+
+.table-row.empty:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--outline);
 }
 
 .auth-panel {

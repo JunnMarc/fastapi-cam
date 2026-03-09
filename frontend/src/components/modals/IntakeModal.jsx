@@ -58,10 +58,11 @@ const initialState = {
 };
 
 export default function IntakeModal() {
-  const { authHeaders, API_BASE, loadCustomers, loadInsights, setResult, setActivePage, setActiveModal } = useAppContext();
+  const { authHeaders, API_BASE, loadCustomers, loadInsights, setResult, setActivePage, setActiveModal, addToast } = useAppContext();
   const [form, setForm] = useState(initialState);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [step, setStep] = useState(1);
+  const totalSteps = 4;
 
   const regionOptions = useMemo(() => regionsData.slice().sort((a, b) => a.name.localeCompare(b.name)), []);
   const selectedRegion = useMemo(() => regionOptions.find((r) => r.name === form.region), [form.region, regionOptions]);
@@ -106,10 +107,25 @@ export default function IntakeModal() {
     setForm((prev) => ({ ...prev, city: value }));
   };
 
+  const nextStep = () => {
+    if (step === 1 && (!form.region || !form.province || !form.city)) {
+      addToast("Please complete location details", "error");
+      return;
+    }
+    if (step === 2 && form.tenure < 0) {
+      addToast("Tenure cannot be negative", "error");
+      return;
+    }
+    setStep((p) => Math.min(p + 1, totalSteps));
+  };
+
+  const prevStep = () => {
+    setStep((p) => Math.max(p - 1, 1));
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
-    setError("");
     setResult(null);
 
     try {
@@ -142,17 +158,51 @@ export default function IntakeModal() {
       await loadInsights();
       setActivePage("registry");
       setActiveModal(null);
+      addToast("Customer registered and scored successfully", "success");
     } catch (err) {
-      setError(err.message);
+      addToast(err.message, "error");
     } finally {
       setLoading(false);
     }
   };
 
+  const renderStepIndicators = () => (
+    <div className="wizard-steps" role="tablist" aria-label="Intake steps">
+      {["Location", "Demographics", "Services", "Billing"].map((label, idx) => {
+        const s = idx + 1;
+        return (
+          <div
+            key={label}
+            role="tab"
+            aria-selected={step === s}
+            aria-controls={`step-panel-${s}`}
+            className={`wizard-step ${step === s ? "active" : ""} ${step > s ? "completed" : ""}`}
+          >
+            <div className="wizard-step-circle">{s}</div>
+            <span className="wizard-step-label">{label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
-    <div className="modal-body">
+    <div className="modal-body wizard">
+      {renderStepIndicators()}
+      
       <form onSubmit={handleSubmit}>
-        <div className="form-grid">
+        <div 
+          className="wizard-panel" 
+          id={`step-panel-${step}`} 
+          role="tabpanel" 
+          aria-labelledby={`step-${step}`}
+        >
+          {step === 1 && (
+            <div className="form-grid" aria-live="polite">
+              <div className="field full">
+                <h5>Step 1: Location Data</h5>
+                <p className="meta">Customer's primary service address.</p>
+              </div>
           <div className="field">
             <label htmlFor="intake-region">Region</label>
             <select id="intake-region" value={form.region} onChange={handleRegionChange}>
@@ -187,99 +237,109 @@ export default function IntakeModal() {
               onChange={handleChange("barangay")}
               placeholder="United Bayanihan"
             />
-          </div>
-          <div className="field">
-            <label htmlFor="intake-service-type">Service Type</label>
-            <select id="intake-service-type" value={form.service_type} onChange={handleChange("service_type")}>
-              {selectOptions.service_type.map((opt) => (
-                <option key={opt}>{opt}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="intake-plan-type">Plan Type</label>
-            <select id="intake-plan-type" value={form.plan_type} onChange={handleChange("plan_type")}>
-              {selectOptions.plan_type.map((opt) => (
-                <option key={opt}>{opt}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="intake-gender">Gender</label>
-            <select id="intake-gender" value={form.gender} onChange={handleChange("gender")}>
-              {selectOptions.gender.map((opt) => (
-                <option key={opt}>{opt}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="intake-senior">Senior Citizen</label>
-            <select id="intake-senior" value={form.SeniorCitizen} onChange={handleChange("SeniorCitizen")}>
-              <option value={0}>0 - No</option>
-              <option value={1}>1 - Yes</option>
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="intake-partner">Partner</label>
-            <select id="intake-partner" value={form.Partner} onChange={handleChange("Partner")}>
-              {selectOptions.Partner.map((opt) => (
-                <option key={opt}>{opt}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="intake-dependents">Dependents</label>
-            <select id="intake-dependents" value={form.Dependents} onChange={handleChange("Dependents")}>
-              {selectOptions.Dependents.map((opt) => (
-                <option key={opt}>{opt}</option>
-              ))}
-            </select>
-          </div>
+              </div>
+            </div>
+          )}
 
-          <div className="field">
-            <label htmlFor="intake-tenure">Tenure (months)</label>
-            <input id="intake-tenure" type="number" min="0" value={form.tenure} onChange={handleChange("tenure")} />
-          </div>
-          <div className="field">
-            <label htmlFor="intake-monthly">Monthly Charges</label>
-            <input id="intake-monthly" type="number" step="0.01" min="0" value={form.MonthlyCharges} onChange={handleChange("MonthlyCharges")} />
-          </div>
-          <div className="field">
-            <label htmlFor="intake-total">Total Charges</label>
-            <input id="intake-total" type="number" step="0.01" min="0" value={form.TotalCharges} onChange={handleChange("TotalCharges")} />
-          </div>
-
-          {[
-            "PhoneService",
-            "MultipleLines",
-            "InternetService",
-            "OnlineSecurity",
-            "OnlineBackup",
-            "DeviceProtection",
-            "TechSupport",
-            "StreamingTV",
-            "StreamingMovies",
-            "Contract",
-            "PaperlessBilling",
-            "PaymentMethod"
-          ].map((field) => {
-            const fieldId = `intake-${field}`;
-            return (
-              <div className="field" key={field}>
-                <label htmlFor={fieldId}>{field}</label>
-                <select id={fieldId} value={form[field]} onChange={handleChange(field)}>
-                {selectOptions[field].map((opt) => (
-                  <option key={opt}>{opt}</option>
-                ))}
+          {step === 3 && (
+            <div className="form-grid" aria-live="polite">
+              <div className="field full">
+                <h5>Step 3: Service Configuration</h5>
+                <p className="meta">Active lines and internet features.</p>
+              </div>
+              <div className="field">
+                <label htmlFor="intake-service-type">Service Type</label>
+                <select id="intake-service-type" value={form.service_type} onChange={handleChange("service_type")}>
+                  {selectOptions.service_type.map((opt) => (
+                    <option key={opt}>{opt}</option>
+                  ))}
                 </select>
               </div>
-            );
-          })}
+              {[
+                "PhoneService",
+                "MultipleLines",
+                "InternetService",
+                "OnlineSecurity",
+                "OnlineBackup",
+                "DeviceProtection",
+                "TechSupport",
+                "StreamingTV",
+                "StreamingMovies"
+              ].map((field) => {
+                const fieldId = `intake-${field}`;
+                return (
+                  <div className="field" key={field}>
+                    <label htmlFor={fieldId}>{field}</label>
+                    <select id={fieldId} value={form[field]} onChange={handleChange(field)}>
+                    {selectOptions[field].map((opt) => (
+                      <option key={opt}>{opt}</option>
+                    ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="form-grid" aria-live="polite">
+              <div className="field full">
+                <h5>Step 4: Billing & Contracts</h5>
+                <p className="meta">Plan type, contract terms, and charges.</p>
+              </div>
+              <div className="field">
+                <label htmlFor="intake-plan-type">Plan Type</label>
+                <select id="intake-plan-type" value={form.plan_type} onChange={handleChange("plan_type")}>
+                  {selectOptions.plan_type.map((opt) => (
+                    <option key={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="intake-monthly">Monthly Charges</label>
+                <input id="intake-monthly" type="number" step="0.01" min="0" value={form.MonthlyCharges} onChange={handleChange("MonthlyCharges")} />
+              </div>
+              <div className="field">
+                <label htmlFor="intake-total">Total Charges</label>
+                <input id="intake-total" type="number" step="0.01" min="0" value={form.TotalCharges} onChange={handleChange("TotalCharges")} />
+              </div>
+              {[
+                "Contract",
+                "PaperlessBilling",
+                "PaymentMethod"
+              ].map((field) => {
+                const fieldId = `intake-${field}`;
+                return (
+                  <div className="field" key={field}>
+                    <label htmlFor={fieldId}>{field}</label>
+                    <select id={fieldId} value={form[field]} onChange={handleChange(field)}>
+                    {selectOptions[field].map((opt) => (
+                      <option key={opt}>{opt}</option>
+                    ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-        {error && <p className="error" role="alert">{error}</p>}
-        <button className="primary" type="submit" disabled={loading}>
-          {loading ? "Saving..." : "Create & Score"}
-        </button>
+
+        <div className="wizard-controls">
+          {step > 1 && (
+            <button className="ghost" type="button" onClick={prevStep} disabled={loading}>
+              Back
+            </button>
+          )}
+          {step < totalSteps ? (
+            <button className="primary" type="button" onClick={nextStep} style={{ marginLeft: "auto" }}>
+              Next Step
+            </button>
+          ) : (
+            <button className="primary" type="submit" disabled={loading} style={{ marginLeft: "auto" }}>
+              {loading ? "Saving..." : "Create & Score"}
+            </button>
+          )}
+        </div>
       </form>
     </div>
   );

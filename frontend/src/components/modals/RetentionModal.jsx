@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAppContext } from "../../context/AppContext";
 
 export default function RetentionModal() {
-  const { customers, token, authHeaders, API_BASE } = useAppContext();
+  const { customers, token, authHeaders, API_BASE, addToast } = useAppContext();
   const [retentionCases, setRetentionCases] = useState([]);
   const [loadingRetention, setLoadingRetention] = useState(false);
   const [retentionForm, setRetentionForm] = useState({
@@ -15,7 +15,6 @@ export default function RetentionModal() {
   const [noteDrafts, setNoteDrafts] = useState({});
   const [activeCaseNotes, setActiveCaseNotes] = useState([]);
   const [activeCaseId, setActiveCaseId] = useState(null);
-  const [error, setError] = useState("");
 
   const loadRetentionCases = async () => {
     if (!token) return;
@@ -45,7 +44,6 @@ export default function RetentionModal() {
 
   const handleCreateRetentionCase = async (event) => {
     event.preventDefault();
-    setError("");
     try {
       const payload = {
         ...retentionForm,
@@ -71,8 +69,9 @@ export default function RetentionModal() {
         next_action_date: ""
       });
       await loadRetentionCases();
+      addToast("Retention case created successfully", "success");
     } catch (err) {
-      setError(err.message);
+      addToast(err.message, "error");
     }
   };
 
@@ -84,8 +83,9 @@ export default function RetentionModal() {
         body: JSON.stringify(patch)
       });
       await loadRetentionCases();
-    } catch {
-      // ignore
+      addToast("Retention case updated", "success");
+    } catch (err) {
+      addToast("Failed to update case", "error");
     }
   };
 
@@ -124,8 +124,9 @@ export default function RetentionModal() {
       if (!response.ok) return;
       setNoteDrafts((prev) => ({ ...prev, [caseId]: "" }));
       await loadNotes(caseId);
-    } catch {
-      // ignore
+      addToast("Note added", "success");
+    } catch (err) {
+      addToast("Failed to add note", "error");
     }
   };
 
@@ -182,10 +183,13 @@ export default function RetentionModal() {
               Create Case
             </button>
           </form>
-          {error && <p className="error" role="alert">{error}</p>}
 
           {loadingRetention ? (
-            <p>Loading cases...</p>
+            <div className="retention-list" aria-label="Loading cases">
+               {[...Array(3)].map((_, i) => (
+                <div className="skeleton skeleton-card" key={i}></div>
+               ))}
+            </div>
           ) : (
             <div className="retention-list">
               {retentionCases.length === 0 ? (
