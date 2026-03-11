@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: attrition
+      POSTGRES_USER: attrition
+      POSTGRES_PASSWORD: attrition
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://attrition:attrition@db:5432/attrition
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123
+      JWT_SECRET: dev-secret-change-me
+      PWD_SALT: change-me-salt
+      ALLOW_ORIGINS: http://localhost:5173,http://localhost
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  db_data:

@@ -13,6 +13,14 @@ function topBuckets(list, limit) {
   return list ? [...list].sort((a, b) => b.count - a.count).slice(0, limit) : [];
 }
 
+function formatCurrency(value) {
+  if (value === null || value === undefined) return "0.00";
+  return Number(value).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
 const regionCoordinatesByCode = {
   "1300000000": [121.033, 14.5995],
   "1400000000": [120.573, 17.3513],
@@ -221,7 +229,7 @@ export default function Dashboard() {
             <div className="insight-summary-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '24px' }}>
               <div className="insight-card">
                 <p className="label">ARPU</p>
-                <p className="value">PHP {insights.avg_monthly_charges}</p>
+                <p className="value">PHP {formatCurrency(insights.avg_monthly_charges)}</p>
                 <p className="meta">Average monthly charges</p>
               </div>
               <div className="insight-card">
@@ -246,7 +254,7 @@ export default function Dashboard() {
                 <InsightPieChart data={insights.internet_mix} name="Internet" />
               </div>
               <div className="insight-list">
-                <p className="label">Tenure Buckets</p>
+                <p className="label">Tenure Buckets (by month)</p>
                 <InsightBarChart data={insights.tenure_buckets} name="Customers" />
               </div>
               <div className="insight-list">

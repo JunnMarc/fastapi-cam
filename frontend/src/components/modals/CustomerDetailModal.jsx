@@ -17,6 +17,14 @@ function formatDate(isoString) {
   });
 }
 
+function formatCurrency(value) {
+  if (value === null || value === undefined) return "0.00";
+  return Number(value).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
 export default function CustomerDetailModal() {
   const { activeCustomerContext, setActiveModal, token, authHeaders, API_BASE } = useAppContext();
   const [customer, setCustomer] = useState(null);
@@ -110,11 +118,11 @@ export default function CustomerDetailModal() {
                 <div style={{ display: 'grid', gap: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span className="label">Monthly Charges</span>
-                    <span style={{ fontWeight: 600 }}>PHP {customer.MonthlyCharges}</span>
+                    <span style={{ fontWeight: 600 }}>PHP {formatCurrency(customer.MonthlyCharges)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span className="label">Total Charges</span>
-                    <span style={{ fontWeight: 600 }}>PHP {customer.TotalCharges}</span>
+                    <span style={{ fontWeight: 600 }}>PHP {formatCurrency(customer.TotalCharges)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span className="label">Contract</span>
