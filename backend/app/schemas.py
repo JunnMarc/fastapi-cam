@@ -223,3 +223,21 @@ class RetentionNoteOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AdminSeedRequest(BaseModel):
+    delete_all: bool = True
+    limit: int | None = None
+
+
+class AdminSeedResponse(BaseModel):
+    inserted: int
+
+
+class AdminScoreAllRequest(BaseModel):
+    batch_size: int = 500
+    write_history: bool = True
+
+
+class AdminScoreAllResponse(BaseModel):
+    scored: int

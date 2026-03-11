@@ -7,7 +7,7 @@ from .model import model_store
 from .auth import hash_password
 from .db import engine, SessionLocal
 from .models import Base, User
-from .routers import auth, users, customers, retention, insights
+from .routers import auth, users, customers, retention, insights, admin
 
 app = FastAPI(title=settings.app_name, version="1.0.0")
 
@@ -24,6 +24,7 @@ app.include_router(users.router)
 app.include_router(customers.router)
 app.include_router(retention.router)
 app.include_router(insights.router)
+app.include_router(admin.router)
 
 
 @app.on_event("startup")

@@ -5,17 +5,11 @@ from ..db import get_db
 from ..models import Customer, AttritionScore
 from ..schemas import CustomerFeatures, CustomerCreate, CustomerUpdate, CustomerOut, CustomerDetail, PredictionResponse, ScoreHistoryOut
 from ..model import model_store
+from ..utils import risk_band, status_from_risk
 from ..config import settings
 from .auth import get_current_user
 
 router = APIRouter(prefix=f"/api/{settings.api_version}", tags=["customers"])
-
-def risk_band(probability: float) -> str:
-    if probability >= 0.7:
-        return "High"
-    if probability >= 0.4:
-        return "Medium"
-    return "Low"
 
 @router.post("/predict", response_model=PredictionResponse)
 def predict(
@@ -140,6 +134,7 @@ def score_customer(
     customer.churn_probability = probability
     customer.risk_level = level
     customer.last_prediction_at = datetime.utcnow()
+    customer.status = status_from_risk(level)
     db.add(customer)
     db.add(
         AttritionScore(
