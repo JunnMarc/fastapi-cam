@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import inspect
 from .config import settings
 from .model import model_store
 from .auth import hash_password
@@ -58,9 +59,14 @@ def _ensure_customer_columns() -> None:
         "plan_type": "TEXT",
     }
     with engine.connect() as conn:
-        existing = {
-            row[1] for row in conn.exec_driver_sql("PRAGMA table_info(customers)").fetchall()
-        }
+        if engine.dialect.name == "sqlite":
+            existing = {
+                row[1]
+                for row in conn.exec_driver_sql("PRAGMA table_info(customers)").fetchall()
+            }
+        else:
+            inspector = inspect(conn)
+            existing = {col["name"] for col in inspector.get_columns("customers")}
         for name, col_type in columns.items():
             if name not in existing:
                 conn.exec_driver_sql(
