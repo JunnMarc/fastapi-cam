@@ -10,6 +10,8 @@ export const AppProvider = ({ children }) => {
   const [activeModal, setActiveModal] = useState(null);
   const [activeCustomerContext, setActiveCustomerContext] = useState(null);
   const [toasts, setToasts] = useState([]);
+  const [apiStatus, setApiStatus] = useState("unknown");
+  const [warming, setWarming] = useState(false);
   
   const addToast = (message, type = "info") => {
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
@@ -87,6 +89,35 @@ export const AppProvider = ({ children }) => {
     }
   }, [token]);
 
+  const warmApi = async (attempts = 3) => {
+    setWarming(true);
+    setApiStatus("warming");
+    for (let i = 0; i < attempts; i += 1) {
+      try {
+        const res = await fetch(`${API_BASE}/health`);
+        if (res.ok) {
+          setApiStatus("ready");
+          setWarming(false);
+          return true;
+        }
+      } catch {
+        // ignore and retry
+      }
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+    setApiStatus("unavailable");
+    setWarming(false);
+    return false;
+  };
+
+  useEffect(() => {
+    warmApi();
+    const id = setInterval(() => {
+      fetch(`${API_BASE}/health`).catch(() => {});
+    }, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <AppContext.Provider
       value={{
@@ -112,6 +143,9 @@ export const AppProvider = ({ children }) => {
         handleLogout,
         authHeaders,
         API_BASE,
+        apiStatus,
+        warming,
+        warmApi,
         toasts,
         addToast,
         removeToast,
