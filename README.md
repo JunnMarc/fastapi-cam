@@ -1,5 +1,6 @@
 # Customer Churn System (FastAPI + React)
 
+## Username: admin || Password: admin123
 This repo contains a minimal end-to-end churn prediction system derived from the logic in `FinalProject_Group6.ipynb`.
 
 ## Backend
